@@ -28,6 +28,17 @@ app.use('/api/connections', require('./src/routes/connections'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'OK', app: 'EduLanka API' }));
 
+app.get('/api/db-test', async (req, res) => {
+  const prisma = require('./src/config/prisma');
+  try {
+    await prisma.$connect();
+    const count = await prisma.institute.count();
+    res.json({ status: 'DB OK', institute_count: count });
+  } catch (err) {
+    res.status(500).json({ status: 'DB ERROR', error: err.message, code: err.code });
+  }
+});
+
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ success: false, message: 'Internal server error.' });
