@@ -1,0 +1,78 @@
+services:
+  # ── Backend API (Node.js Web Service) ─────────────────────────────────────
+  - type: web
+    name: edulanka-api
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      # Database — use an external MySQL service (see README for free options)
+      - key: DB_HOST
+        sync: false      # set manually in Render dashboard
+      - key: DB_PORT
+        value: 3306
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        value: edulanka
+      # Auth
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRE
+        value: 7d
+      # CORS — set to your Render frontend URL after deploy
+      - key: ALLOWED_ORIGINS
+        value: https://edulanka-frontend.onrender.com
+      - key: FRONTEND_URL
+        value: https://edulanka-frontend.onrender.com
+      # Email (optional — leave blank to use console fallback in dev)
+      - key: EMAIL_HOST
+        value: smtp.gmail.com
+      - key: EMAIL_PORT
+        value: 587
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      - key: EMAIL_FROM
+        value: EduLanka <noreply@edulanka.lk>
+      - key: UPLOAD_PATH
+        value: ./uploads
+
+  # ── Frontend (React Static Site) ──────────────────────────────────────────
+  - type: web
+    name: edulanka-frontend
+    env: static
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: build
+    envVars:
+      # Must match your backend Render URL
+      - key: REACT_APP_API_URL
+        value: https://edulanka-api.onrender.com/api
+    routes:
+      # SPA fallback — all routes serve index.html
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+# ── Database ───────────────────────────────────────────────────────────────
+# Render free tier does NOT include MySQL.
+# Use one of these FREE external MySQL services:
+#   1. Aiven   — https://aiven.io          (free 1GB MySQL)
+#   2. Railway — https://railway.app        ($5/month free credits)
+#   3. PlanetScale — https://planetscale.com (free MySQL-compatible)
+#
+# After creating the DB:
+#   1. Run schema: backend/src/config/schema.sql
+#   2. Set DB_HOST / DB_USER / DB_PASSWORD in Render dashboard → Environment

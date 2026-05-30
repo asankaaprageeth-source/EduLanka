@@ -5,7 +5,11 @@ require('dotenv').config();
 
 const app = express();
 
-app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(',').map(s => s.trim());
+app.use(cors({
+  origin: (origin, cb) => (!origin || allowedOrigins.includes(origin) ? cb(null, true) : cb(new Error('CORS: origin not allowed'))),
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -19,6 +23,8 @@ app.use('/api/attendance', require('./src/routes/attendance'));
 app.use('/api/payments', require('./src/routes/payments'));
 app.use('/api/messages', require('./src/routes/messages'));
 app.use('/api/exams', require('./src/routes/exams'));
+app.use('/api/institutes', require('./src/routes/institutes'));
+app.use('/api/connections', require('./src/routes/connections'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'OK', app: 'EduLanka API' }));
 
