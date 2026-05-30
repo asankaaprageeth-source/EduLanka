@@ -1,5 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 const { v4: uuidv4 } = require('uuid');
 const QRCode = require('qrcode');
 const pool = require('../config/database');
@@ -7,6 +9,179 @@ require('dotenv').config();
 
 const generateToken = (payload) => {
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRE });
+};
+
+// ── Email transporter ─────────────────────────────────────────────────────────
+const createTransporter = () => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) return null;
+  return nodemailer.createTransport({
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port: Number(process.env.EMAIL_PORT) || 587,
+    secure: false,
+    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+  });
+};
+
+const sendResetEmail = async (toEmail, resetLink) => {
+  const transporter = createTransporter();
+  if (!transporter) {
+    console.log(`[DEV] Password reset link for ${toEmail}: ${resetLink}`);
+    return;
+  }
+  await transporter.sendMail({
+    from: process.env.EMAIL_FROM || `EduLanka <${process.env.EMAIL_USER}>`,
+    to: toEmail,
+    subject: 'EduLanka - Password Reset Request',
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:24px;">
+        <h2 style="color:#1976d2;">EduLanka Password Reset</h2>
+        <p>ඔබගේ EduLanka account password reset කිරීමට request කර ඇත.</p>
+        <p>පහත button click කර new password set කරන්න:</p>
+        <a href="${resetLink}" style="display:inline-block;margin:16px 0;padding:12px 24px;background:#1976d2;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">Reset Password</a>
+        <p style="color:#666;font-size:13px;">මෙම link <strong>1 hour</strong> පමණක් valid වේ.</p>
+        <p style="color:#666;font-size:13px;">ඔබ password reset request නොකළේ නම් මෙම email ignore කරන්න.</p>
+        <hr style="border:none;border-top:1px solid #eee;margin:16px 0;">
+        <p style="color:#999;font-size:12px;">EduLanka School Management System</p>
+      </div>
+    `,
+  });
+};
+
+// ── Forgot Password ───────────────────────────────────────────────────────────
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email?.trim()) {
+      return res.status(400).json({ success: false, message: 'Email is required.' });
+    }
+
+    // Rate-limit: max 3 active tokens per email per hour
+    const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+
+    // Search institutes first, then users
+    let table = null;
+    let userId = null;
+    let userEmail = email.trim().toLowerCase();
+
+    const [[instRow]] = await pool.execute(
+      'SELECT id, email FROM institutes WHERE LOWER(email) = ? AND is_active = 1',
+      [userEmail]
+    );
+    if (instRow) {
+      table = 'institutes';
+      userId = instRow.id;
+    } else {
+      const [[userRow]] = await pool.execute(
+        'SELECT id, email FROM users WHERE LOWER(email) = ? AND is_active = 1',
+        [userEmail]
+      );
+      if (userRow) {
+        table = 'users';
+        userId = userRow.id;
+      }
+    }
+
+    // Always respond success to avoid email enumeration
+    if (!table) {
+      return res.json({ success: true, message: 'If that email exists, a reset link has been sent.' });
+    }
+
+    // Check rate limit (max 3 tokens in last hour)
+    const [[{ cnt }]] = await pool.execute(
+      `SELECT COUNT(*) as cnt FROM ${table} WHERE id = ? AND reset_token IS NOT NULL AND reset_token_expiry > ?`,
+      [userId, hourAgo]
+    );
+    if (cnt >= 3) {
+      return res.status(429).json({ success: false, message: 'Too many reset requests. Please try again in an hour.' });
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiry = new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+
+    await pool.execute(
+      `UPDATE ${table} SET reset_token = ?, reset_token_expiry = ? WHERE id = ?`,
+      [token, expiry, userId]
+    );
+
+    const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${token}`;
+    await sendResetEmail(email.trim(), resetLink);
+
+    res.json({ success: true, message: 'If that email exists, a reset link has been sent.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server error.' });
+  }
+};
+
+// ── Verify Reset Token ────────────────────────────────────────────────────────
+exports.verifyResetToken = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+    const [[instRow]] = await pool.execute(
+      'SELECT id FROM institutes WHERE reset_token = ? AND reset_token_expiry > ?',
+      [token, now]
+    );
+    if (instRow) return res.json({ success: true, valid: true });
+
+    const [[userRow]] = await pool.execute(
+      'SELECT id FROM users WHERE reset_token = ? AND reset_token_expiry > ?',
+      [token, now]
+    );
+    if (userRow) return res.json({ success: true, valid: true });
+
+    res.json({ success: false, valid: false, message: 'Invalid or expired reset link.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server error.' });
+  }
+};
+
+// ── Reset Password ────────────────────────────────────────────────────────────
+exports.resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Token and new password are required.' });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 8 characters.' });
+    }
+
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+    const [[instRow]] = await pool.execute(
+      'SELECT id FROM institutes WHERE reset_token = ? AND reset_token_expiry > ?',
+      [token, now]
+    );
+    if (instRow) {
+      const hashed = await bcrypt.hash(newPassword, 12);
+      await pool.execute(
+        'UPDATE institutes SET password = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?',
+        [hashed, instRow.id]
+      );
+      return res.json({ success: true, message: 'Password reset successfully.' });
+    }
+
+    const [[userRow]] = await pool.execute(
+      'SELECT id FROM users WHERE reset_token = ? AND reset_token_expiry > ?',
+      [token, now]
+    );
+    if (userRow) {
+      const hashed = await bcrypt.hash(newPassword, 12);
+      await pool.execute(
+        'UPDATE users SET password = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?',
+        [hashed, userRow.id]
+      );
+      return res.json({ success: true, message: 'Password reset successfully.' });
+    }
+
+    res.status(400).json({ success: false, message: 'Invalid or expired reset link.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server error.' });
+  }
 };
 
 const generateInstituteCode = () => {
@@ -58,27 +233,41 @@ exports.registerInstitute = async (req, res) => {
 // Register Student or Teacher
 exports.registerUser = async (req, res) => {
   try {
-    const { name, email, password, phone, parent_phone, role, institute_code } = req.body;
+    const { name, email, password, phone, parent_phone, role, institute_code, district, city, village, subjects } = req.body;
 
     if (!['student', 'teacher'].includes(role)) {
       return res.status(400).json({ success: false, message: 'Invalid role.' });
     }
-
-    const [institutes] = await pool.execute(
-      'SELECT id FROM institutes WHERE institute_code = ? AND is_active = 1',
-      [institute_code]
-    );
-    if (institutes.length === 0) {
-      return res.status(400).json({ success: false, message: 'Invalid institute code.' });
+    if (role === 'teacher' && !district) {
+      return res.status(400).json({ success: false, message: 'District is required.' });
     }
-    const institute_id = institutes[0].id;
+    if (role === 'teacher' && (!subjects || !Array.isArray(subjects) || subjects.length === 0)) {
+      return res.status(400).json({ success: false, message: 'Please select at least one subject.' });
+    }
+
+    let institute_id = null;
+
+    if (role === 'teacher') {
+      if (!institute_code) {
+        return res.status(400).json({ success: false, message: 'Institute code is required for teachers.' });
+      }
+      const [institutes] = await pool.execute(
+        'SELECT id FROM institutes WHERE institute_code = ? AND is_active = 1',
+        [institute_code]
+      );
+      if (institutes.length === 0) {
+        return res.status(400).json({ success: false, message: 'Invalid institute code.' });
+      }
+      institute_id = institutes[0].id;
+    }
 
     const hashedPassword = await bcrypt.hash(password, 12);
     const student_id = role === 'student' ? `STU${Date.now()}` : null;
+    const subjectsJson = role === 'teacher' && subjects && subjects.length ? JSON.stringify(subjects) : null;
 
     const [result] = await pool.execute(
-      'INSERT INTO users (institute_id, role, name, email, password, phone, parent_phone, student_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [institute_id, role, name, email || null, hashedPassword, phone || null, parent_phone || null, student_id]
+      'INSERT INTO users (institute_id, role, name, email, password, phone, parent_phone, student_id, district, city, village, subjects) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [institute_id, role, name, email || null, hashedPassword, phone || null, parent_phone || null, student_id, district || null, city || null, village || null, subjectsJson]
     );
 
     const userId = result.insertId;

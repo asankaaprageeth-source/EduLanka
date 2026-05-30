@@ -53,7 +53,12 @@ const Login = () => {
               sx={{ mb: 2 }} required />
             <TextField fullWidth label="Password" type="password" value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
-              sx={{ mb: 3 }} required />
+              sx={{ mb: 1 }} required />
+            <Box sx={{ textAlign: 'right', mb: 2 }}>
+              <Link to="/forgot-password" style={{ color: '#1976d2', fontSize: '13px', textDecoration: 'none' }}>
+                Forgot Password?
+              </Link>
+            </Box>
             <Button fullWidth type="submit" variant="contained" size="large" disabled={loading}
               sx={{ py: 1.5, fontWeight: 700 }}>
               {loading ? <CircularProgress size={24} color="inherit" /> : 'Login'}
