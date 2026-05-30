@@ -52,7 +52,7 @@ services:
     staticPublishPath: build
     envVars:
       - key: REACT_APP_API_URL
-        value: https://edulanka-api.onrender.com/api
+        value: https://edulanka-backend.onrender.com/api
     routes:
       - type: rewrite
         source: /*
