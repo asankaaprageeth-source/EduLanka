@@ -1,7 +1,7 @@
 services:
   # ── Backend API (Node.js Web Service) ─────────────────────────────────────
   - type: web
-    name: edulanka-api
+    name: edulanka-backend
     env: node
     plan: free
     rootDir: backend
