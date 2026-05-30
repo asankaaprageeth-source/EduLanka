@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { School, Person, PersonOutline } from '@mui/icons-material';
+import { School, Person, SupervisorAccount } from '@mui/icons-material';
 import { Box, Typography, Button, Container, Paper } from '@mui/material';
 
 const Landing = () => {
@@ -9,7 +9,7 @@ const Landing = () => {
   const roles = [
     { label: 'Institute', sinhala: 'ආයතනය', icon: <School sx={{ fontSize: 50 }} />, color: '#1976d2', path: '/register/institute' },
     { label: 'Student', sinhala: 'සිසුවා', icon: <Person sx={{ fontSize: 50 }} />, color: '#388e3c', path: '/register/student' },
-    { label: 'Teacher', sinhala: 'ගුරුවරයා', icon: <PersonOutline sx={{ fontSize: 50 }} />, color: '#f57c00', path: '/register/teacher' },
+    { label: 'Teacher', sinhala: 'ගුරුවරයා', icon: <SupervisorAccount sx={{ fontSize: 50 }} />, color: '#f57c00', path: '/register/teacher' },
   ];
 
   return (

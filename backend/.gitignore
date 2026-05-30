@@ -3,3 +3,5 @@ node_modules/
 uploads/*.png
 uploads/*.jpg
 uploads/*.pdf
+
+/src/generated/prisma

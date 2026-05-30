@@ -48,7 +48,7 @@ const Payments = () => {
                   <TableCell>{p.month}</TableCell>
                   <TableCell align="right">Rs. {Number(p.amount).toLocaleString()}</TableCell>
                   <TableCell><Chip label={p.status} color={statusColor[p.status]} size="small" /></TableCell>
-                  <TableCell>{p.paid_date || '—'}</TableCell>
+                  <TableCell>{p.paid_date ? new Date(p.paid_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</TableCell>
                   <TableCell><Typography variant="caption">{p.receipt_no || '—'}</Typography></TableCell>
                 </TableRow>
               ))}

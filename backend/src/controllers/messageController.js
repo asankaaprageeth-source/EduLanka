@@ -1,6 +1,5 @@
-const pool = require('../config/database');
+const prisma = require('../config/prisma');
 
-// Send message
 exports.sendMessage = async (req, res) => {
   try {
     const { subject, body, target_type, target_id } = req.body;
@@ -8,107 +7,146 @@ exports.sendMessage = async (req, res) => {
     const sender_id = req.user.id;
     const sender_type = req.user.role === 'institute' ? 'institute' : 'teacher';
 
-    const [result] = await pool.execute(
-      'INSERT INTO messages (institute_id, sender_id, sender_type, subject, body, target_type, target_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [institute_id, sender_id || null, sender_type, subject, body, target_type, target_id || null]
-    );
-    const message_id = result.insertId;
+    const message = await prisma.message.create({
+      data: {
+        institute_id,
+        sender_id: sender_id || null,
+        sender_type,
+        subject,
+        body,
+        target_type,
+        target_id: target_id ? Number(target_id) : null,
+      },
+    });
 
-    let recipients = [];
+    let recipientUsers = [];
 
     if (target_type === 'all') {
-      const [students] = await pool.execute(
-        'SELECT id FROM users WHERE institute_id = ? AND role = "student" AND is_active = 1',
-        [institute_id]
-      );
-      recipients = students.map((s) => ({ id: s.id, type: 'student' }));
+      recipientUsers = await prisma.user.findMany({
+        where: { institute_id, role: 'student', is_active: true },
+        select: { id: true, role: true },
+      });
     } else if (target_type === 'teachers') {
-      const [teachers] = await pool.execute(
-        'SELECT id FROM users WHERE institute_id = ? AND role = "teacher" AND is_active = 1',
-        [institute_id]
-      );
-      recipients = teachers.map((t) => ({ id: t.id, type: 'teacher' }));
+      recipientUsers = await prisma.user.findMany({
+        where: { institute_id, role: 'teacher', is_active: true },
+        select: { id: true, role: true },
+      });
     } else if (target_type === 'class') {
-      const [students] = await pool.execute(
-        'SELECT ce.student_id as id FROM class_enrollments ce WHERE ce.class_id = ? AND ce.is_active = 1',
-        [target_id]
-      );
-      recipients = students.map((s) => ({ id: s.id, type: 'student' }));
+      const enrollments = await prisma.classEnrollment.findMany({
+        where: { class_id: Number(target_id), is_active: true },
+        select: { student_id: true },
+      });
+      recipientUsers = enrollments.map((e) => ({ id: e.student_id, role: 'student' }));
     } else if (target_type === 'individual') {
-      const [user] = await pool.execute('SELECT id, role FROM users WHERE id = ?', [target_id]);
-      if (user.length > 0) recipients = [{ id: user[0].id, type: user[0].role }];
+      const user = await prisma.user.findUnique({
+        where: { id: Number(target_id) },
+        select: { id: true, role: true },
+      });
+      if (user) recipientUsers = [user];
     }
 
-    for (const r of recipients) {
-      await pool.execute(
-        'INSERT INTO message_recipients (message_id, recipient_id, recipient_type) VALUES (?, ?, ?)',
-        [message_id, r.id, r.type]
-      );
+    if (recipientUsers.length > 0) {
+      await prisma.messageRecipient.createMany({
+        data: recipientUsers.map((r) => ({
+          message_id: message.id,
+          recipient_id: r.id,
+          recipient_type: r.role,
+        })),
+      });
     }
 
-    res.status(201).json({ success: true, message: 'Message sent.', data: { message_id, recipients_count: recipients.length } });
+    res.status(201).json({ success: true, message: 'Message sent.', data: { message_id: message.id, recipients_count: recipientUsers.length } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Server error.' });
   }
 };
 
-// Get inbox for student or teacher
 exports.getInbox = async (req, res) => {
   try {
     const user_id = req.user.id;
-    const [messages] = await pool.execute(
-      `SELECT m.id, m.subject, m.body, m.created_at, m.sender_type,
-       mr.is_read, mr.read_at,
-       CASE WHEN m.sender_type = 'institute' THEN i.name ELSE u.name END as sender_name
-       FROM message_recipients mr
-       JOIN messages m ON mr.message_id = m.id
-       LEFT JOIN institutes i ON m.institute_id = i.id AND m.sender_type = 'institute'
-       LEFT JOIN users u ON m.sender_id = u.id AND m.sender_type = 'teacher'
-       WHERE mr.recipient_id = ?
-       ORDER BY m.created_at DESC`,
-      [user_id]
-    );
-    res.json({ success: true, data: messages });
+
+    const messageRecipients = await prisma.messageRecipient.findMany({
+      where: { recipient_id: user_id },
+      include: {
+        message: { include: { institute: { select: { name: true } } } },
+      },
+      orderBy: { message: { created_at: 'desc' } },
+    });
+
+    const teacherSenderIds = [...new Set(
+      messageRecipients
+        .filter((mr) => mr.message.sender_type === 'teacher' && mr.message.sender_id)
+        .map((mr) => mr.message.sender_id)
+    )];
+
+    const senders = teacherSenderIds.length > 0
+      ? await prisma.user.findMany({ where: { id: { in: teacherSenderIds } }, select: { id: true, name: true } })
+      : [];
+    const senderMap = Object.fromEntries(senders.map((s) => [s.id, s.name]));
+
+    const data = messageRecipients.map((mr) => ({
+      id: mr.message.id,
+      subject: mr.message.subject,
+      body: mr.message.body,
+      created_at: mr.message.created_at,
+      sender_type: mr.message.sender_type,
+      is_read: mr.is_read,
+      read_at: mr.read_at,
+      sender_name: mr.message.sender_type === 'institute'
+        ? mr.message.institute.name
+        : (senderMap[mr.message.sender_id] || null),
+    }));
+
+    res.json({ success: true, data });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Server error.' });
   }
 };
 
-// Get sent messages
 exports.getSentMessages = async (req, res) => {
   try {
     const institute_id = req.user.institute_id;
     const sender_id = req.user.role === 'teacher' ? req.user.id : null;
 
-    let query = `SELECT m.*, COUNT(mr.id) as recipient_count,
-                 SUM(mr.is_read) as read_count
-                 FROM messages m
-                 LEFT JOIN message_recipients mr ON m.id = mr.message_id
-                 WHERE m.institute_id = ?`;
-    const params = [institute_id];
+    const where = { institute_id };
+    if (sender_id) where.sender_id = sender_id;
 
-    if (sender_id) { query += ' AND m.sender_id = ?'; params.push(sender_id); }
-    query += ' GROUP BY m.id ORDER BY m.created_at DESC';
+    const messages = await prisma.message.findMany({
+      where,
+      include: {
+        _count: { select: { recipients: true } },
+        recipients: { select: { is_read: true } },
+      },
+      orderBy: { created_at: 'desc' },
+    });
 
-    const [messages] = await pool.execute(query, params);
-    res.json({ success: true, data: messages });
+    const data = messages.map((m) => ({
+      ...m,
+      recipient_count: m._count.recipients,
+      read_count: m.recipients.filter((r) => r.is_read).length,
+      _count: undefined,
+      recipients: undefined,
+    }));
+
+    res.json({ success: true, data });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Server error.' });
   }
 };
 
-// Mark message as read
 exports.markRead = async (req, res) => {
   try {
     const { message_id } = req.params;
     const user_id = req.user.id;
-    await pool.execute(
-      'UPDATE message_recipients SET is_read = 1, read_at = NOW() WHERE message_id = ? AND recipient_id = ?',
-      [message_id, user_id]
-    );
+
+    await prisma.messageRecipient.updateMany({
+      where: { message_id: Number(message_id), recipient_id: user_id },
+      data: { is_read: true, read_at: new Date() },
+    });
+
     res.json({ success: true });
   } catch (err) {
     console.error(err);

@@ -1,13 +1,12 @@
-const pool = require('../config/database');
+const prisma = require('../config/prisma');
 
-// Get institutes list (returns current institute for institute role)
 exports.getInstitutesList = async (req, res) => {
   try {
     const institute_id = req.user.institute_id;
-    const [institutes] = await pool.execute(
-      'SELECT id, name, institute_code FROM institutes WHERE id = ? AND is_active = 1',
-      [institute_id]
-    );
+    const institutes = await prisma.institute.findMany({
+      where: { id: institute_id, is_active: true },
+      select: { id: true, name: true, institute_code: true },
+    });
     res.json({ success: true, data: institutes });
   } catch (err) {
     console.error(err);
@@ -15,49 +14,36 @@ exports.getInstitutesList = async (req, res) => {
   }
 };
 
-// Get institute dashboard stats
 exports.getDashboard = async (req, res) => {
   try {
     const institute_id = req.user.institute_id;
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date(new Date().toISOString().split('T')[0]);
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-    const [[students]] = await pool.execute(
-      'SELECT COUNT(*) as total FROM users WHERE institute_id = ? AND role = "student" AND is_active = 1',
-      [institute_id]
-    );
-    const [[teachers]] = await pool.execute(
-      'SELECT COUNT(*) as total FROM users WHERE institute_id = ? AND role = "teacher" AND is_active = 1',
-      [institute_id]
-    );
-    const [[classes]] = await pool.execute(
-      'SELECT COUNT(*) as total FROM classes WHERE institute_id = ? AND is_active = 1',
-      [institute_id]
-    );
-    const [[todayAttendance]] = await pool.execute(
-      `SELECT COUNT(*) as total FROM attendance a
-       JOIN classes c ON a.class_id = c.id
-       WHERE c.institute_id = ? AND a.date = ? AND a.status = 'present'`,
-      [institute_id, today]
-    );
-    const [[monthlyIncome]] = await pool.execute(
-      `SELECT COALESCE(SUM(amount), 0) as total FROM payments
-       WHERE institute_id = ? AND status = 'paid' AND DATE_FORMAT(paid_date, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m')`,
-      [institute_id]
-    );
-    const [[pendingFees]] = await pool.execute(
-      `SELECT COUNT(*) as total FROM payments WHERE institute_id = ? AND status IN ('pending', 'overdue')`,
-      [institute_id]
-    );
+    const [studentsCount, teachersCount, classesCount, todayAttendanceCount, monthlyIncomeData, pendingFeesCount] =
+      await Promise.all([
+        prisma.user.count({ where: { institute_id, role: 'student', is_active: true } }),
+        prisma.user.count({ where: { institute_id, role: 'teacher', is_active: true } }),
+        prisma.class.count({ where: { institute_id, is_active: true } }),
+        prisma.attendance.count({ where: { class: { institute_id }, date: today, status: 'present' } }),
+        prisma.payment.aggregate({
+          where: { institute_id, status: 'paid', paid_date: { gte: startOfMonth, lte: endOfMonth } },
+          _sum: { amount: true },
+        }),
+        prisma.payment.count({ where: { institute_id, status: { in: ['pending', 'overdue'] } } }),
+      ]);
 
     res.json({
       success: true,
       data: {
-        total_students: students.total,
-        total_teachers: teachers.total,
-        total_classes: classes.total,
-        today_attendance: todayAttendance.total,
-        monthly_income: monthlyIncome.total,
-        pending_fees: pendingFees.total,
+        total_students: studentsCount,
+        total_teachers: teachersCount,
+        total_classes: classesCount,
+        today_attendance: todayAttendanceCount,
+        monthly_income: monthlyIncomeData._sum.amount || 0,
+        pending_fees: pendingFeesCount,
       },
     });
   } catch (err) {
@@ -66,77 +52,83 @@ exports.getDashboard = async (req, res) => {
   }
 };
 
-// Get all students
 exports.getStudents = async (req, res) => {
   try {
     const institute_id = req.user.institute_id;
-    const [students] = await pool.execute(
-      `SELECT u.id, u.name, u.email, u.phone, u.parent_phone, u.photo, u.qr_code, u.student_id, u.created_at,
-       GROUP_CONCAT(c.name SEPARATOR ', ') as classes
-       FROM users u
-       LEFT JOIN class_enrollments ce ON u.id = ce.student_id AND ce.is_active = 1
-       LEFT JOIN classes c ON ce.class_id = c.id
-       WHERE u.institute_id = ? AND u.role = 'student' AND u.is_active = 1
-       GROUP BY u.id
-       ORDER BY u.name`,
-      [institute_id]
-    );
-    res.json({ success: true, data: students });
+    const students = await prisma.user.findMany({
+      where: { institute_id, role: 'student', is_active: true },
+      include: {
+        enrollments: {
+          where: { is_active: true },
+          include: { class: { select: { name: true } } },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    const data = students.map((s) => {
+      const { enrollments, ...rest } = s;
+      return { ...rest, classes: enrollments.map((e) => e.class.name).join(', ') };
+    });
+
+    res.json({ success: true, data });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Server error.' });
   }
 };
 
-// Get all teachers
 exports.getTeachers = async (req, res) => {
   try {
     const institute_id = req.user.institute_id;
-    const [teachers] = await pool.execute(
-      `SELECT u.id, u.name, u.email, u.phone, u.photo, u.district, u.subjects, u.created_at,
-       GROUP_CONCAT(c.name SEPARATOR ', ') as classes
-       FROM users u
-       LEFT JOIN classes c ON u.id = c.teacher_id AND c.is_active = 1
-       WHERE u.institute_id = ? AND u.role = 'teacher' AND u.is_active = 1
-       GROUP BY u.id
-       ORDER BY u.name`,
-      [institute_id]
-    );
-    res.json({ success: true, data: teachers });
+    const teachers = await prisma.user.findMany({
+      where: { institute_id, role: 'teacher', is_active: true },
+      include: {
+        taught_classes: { where: { is_active: true }, select: { name: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    const data = teachers.map((t) => {
+      const { taught_classes, ...rest } = t;
+      return { ...rest, classes: taught_classes.map((c) => c.name).join(', ') };
+    });
+
+    res.json({ success: true, data });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Server error.' });
   }
 };
 
-// Get all classes
 exports.getClasses = async (req, res) => {
   try {
     const institute_id = req.user.institute_id;
-    const [classes] = await pool.execute(
-      `SELECT c.*, u.name as teacher_name,
-       COUNT(DISTINCT ce.student_id) as student_count
-       FROM classes c
-       LEFT JOIN users u ON c.teacher_id = u.id
-       LEFT JOIN class_enrollments ce ON c.id = ce.class_id AND ce.is_active = 1
-       WHERE c.institute_id = ? AND c.is_active = 1
-       GROUP BY c.id
-       ORDER BY c.name`,
-      [institute_id]
-    );
-    res.json({ success: true, data: classes });
+    const classes = await prisma.class.findMany({
+      where: { institute_id, is_active: true },
+      include: {
+        teacher: { select: { name: true } },
+        _count: { select: { enrollments: { where: { is_active: true } } } },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    const data = classes.map((c) => {
+      const { teacher, _count, ...rest } = c;
+      return { ...rest, teacher_name: teacher?.name || null, student_count: _count.enrollments };
+    });
+
+    res.json({ success: true, data });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Server error.' });
   }
 };
 
-// Create class
 exports.createClass = async (req, res) => {
   try {
     const institute_id = req.user.institute_id;
     const { name, grade, al_year, class_day, start_time, end_time, monthly_fee, class_type, teacher_id } = req.body;
-
     const isAL = grade && (grade.trim() === 'A/L' || grade.trim() === 'A/L Revision');
 
     if (!name?.trim()) return res.status(400).json({ success: false, message: 'Class name is required.' });
@@ -144,36 +136,33 @@ exports.createClass = async (req, res) => {
     if (isAL && !al_year) return res.status(400).json({ success: false, message: 'A/L Year is required.' });
     if (!class_day?.trim()) return res.status(400).json({ success: false, message: 'Day is required.' });
 
-    const [result] = await pool.execute(
-      `INSERT INTO classes (institute_id, teacher_id, name, grade, al_year, class_day, start_time, end_time, monthly_fee, class_type)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
+    const cls = await prisma.class.create({
+      data: {
         institute_id,
-        teacher_id || null,
-        name.trim(),
-        grade.trim(),
-        isAL ? Number(al_year) : null,
-        class_day.trim(),
-        start_time || null,
-        end_time || null,
-        monthly_fee || 0,
-        class_type || 'hall',
-      ]
-    );
-    res.status(201).json({ success: true, message: 'Class created successfully.', data: { id: result.insertId } });
+        teacher_id: teacher_id ? Number(teacher_id) : null,
+        name: name.trim(),
+        grade: grade.trim(),
+        al_year: isAL ? Number(al_year) : null,
+        class_day: class_day.trim(),
+        start_time: start_time || null,
+        end_time: end_time || null,
+        monthly_fee: monthly_fee || 0,
+        class_type: class_type || 'hall',
+      },
+    });
+
+    res.status(201).json({ success: true, message: 'Class created successfully.', data: { id: cls.id } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Server error.' });
   }
 };
 
-// Update class
 exports.updateClass = async (req, res) => {
   try {
     const institute_id = req.user.institute_id;
     const { id } = req.params;
     const { name, grade, al_year, class_day, start_time, end_time, monthly_fee, class_type, teacher_id } = req.body;
-
     const isAL = grade && (grade.trim() === 'A/L' || grade.trim() === 'A/L Revision');
 
     if (!name?.trim()) return res.status(400).json({ success: false, message: 'Class name is required.' });
@@ -181,29 +170,24 @@ exports.updateClass = async (req, res) => {
     if (isAL && !al_year) return res.status(400).json({ success: false, message: 'A/L Year is required.' });
     if (!class_day?.trim()) return res.status(400).json({ success: false, message: 'Day is required.' });
 
-    const [[existing]] = await pool.execute(
-      'SELECT id FROM classes WHERE id = ? AND institute_id = ? AND is_active = 1',
-      [id, institute_id]
-    );
+    const existing = await prisma.class.findFirst({ where: { id: Number(id), institute_id, is_active: true } });
     if (!existing) return res.status(404).json({ success: false, message: 'Class not found.' });
 
-    await pool.execute(
-      `UPDATE classes SET name=?, grade=?, al_year=?, class_day=?, start_time=?, end_time=?, monthly_fee=?, class_type=?, teacher_id=?
-       WHERE id=? AND institute_id=?`,
-      [
-        name.trim(),
-        grade.trim(),
-        isAL ? Number(al_year) : null,
-        class_day.trim(),
-        start_time || null,
-        end_time || null,
-        monthly_fee || 0,
-        class_type || 'hall',
-        teacher_id || null,
-        id,
-        institute_id,
-      ]
-    );
+    await prisma.class.update({
+      where: { id: Number(id) },
+      data: {
+        name: name.trim(),
+        grade: grade.trim(),
+        al_year: isAL ? Number(al_year) : null,
+        class_day: class_day.trim(),
+        start_time: start_time || null,
+        end_time: end_time || null,
+        monthly_fee: monthly_fee || 0,
+        class_type: class_type || 'hall',
+        teacher_id: teacher_id ? Number(teacher_id) : null,
+      },
+    });
+
     res.json({ success: true, message: 'Class updated successfully.' });
   } catch (err) {
     console.error(err);
@@ -211,19 +195,15 @@ exports.updateClass = async (req, res) => {
   }
 };
 
-// Delete class (soft delete)
 exports.deleteClass = async (req, res) => {
   try {
     const institute_id = req.user.institute_id;
     const { id } = req.params;
 
-    const [[existing]] = await pool.execute(
-      'SELECT id FROM classes WHERE id = ? AND institute_id = ? AND is_active = 1',
-      [id, institute_id]
-    );
+    const existing = await prisma.class.findFirst({ where: { id: Number(id), institute_id, is_active: true } });
     if (!existing) return res.status(404).json({ success: false, message: 'Class not found.' });
 
-    await pool.execute('UPDATE classes SET is_active = 0 WHERE id = ? AND institute_id = ?', [id, institute_id]);
+    await prisma.class.update({ where: { id: Number(id) }, data: { is_active: false } });
     res.json({ success: true, message: 'Class deleted successfully.' });
   } catch (err) {
     console.error(err);
@@ -231,27 +211,30 @@ exports.deleteClass = async (req, res) => {
   }
 };
 
-// Enroll student to class
 exports.enrollStudent = async (req, res) => {
   try {
     const { class_id, student_id } = req.body;
     const institute_id = req.user.institute_id;
 
-    const [cls] = await pool.execute('SELECT id FROM classes WHERE id = ? AND institute_id = ?', [class_id, institute_id]);
-    if (cls.length === 0) return res.status(404).json({ success: false, message: 'Class not found.' });
+    const cls = await prisma.class.findFirst({ where: { id: Number(class_id), institute_id } });
+    if (!cls) return res.status(404).json({ success: false, message: 'Class not found.' });
 
-    await pool.execute(
-      'INSERT INTO class_enrollments (class_id, student_id) VALUES (?, ?) ON DUPLICATE KEY UPDATE is_active = 1',
-      [class_id, student_id]
-    );
+    await prisma.classEnrollment.upsert({
+      where: { class_id_student_id: { class_id: Number(class_id), student_id: Number(student_id) } },
+      create: { class_id: Number(class_id), student_id: Number(student_id), is_active: true },
+      update: { is_active: true },
+    });
 
-    const month = new Date().toISOString().slice(0, 7);
-    const [cls2] = await pool.execute('SELECT monthly_fee FROM classes WHERE id = ?', [class_id]);
-    if (cls2[0].monthly_fee > 0) {
-      await pool.execute(
-        'INSERT IGNORE INTO payments (student_id, class_id, institute_id, amount, month, status) VALUES (?, ?, ?, ?, ?, "pending")',
-        [student_id, class_id, institute_id, cls2[0].monthly_fee, month]
-      );
+    if (Number(cls.monthly_fee) > 0) {
+      const month = new Date().toISOString().slice(0, 7);
+      const existingPayment = await prisma.payment.findFirst({
+        where: { student_id: Number(student_id), class_id: Number(class_id), month },
+      });
+      if (!existingPayment) {
+        await prisma.payment.create({
+          data: { student_id: Number(student_id), class_id: Number(class_id), institute_id, amount: cls.monthly_fee, month, status: 'pending' },
+        });
+      }
     }
 
     res.json({ success: true, message: 'Student enrolled successfully.' });
@@ -261,62 +244,92 @@ exports.enrollStudent = async (req, res) => {
   }
 };
 
-// Get attendance report
 exports.getAttendanceReport = async (req, res) => {
   try {
     const institute_id = req.user.institute_id;
     const { class_id, date, month } = req.query;
 
-    let query = `SELECT a.*, u.name as student_name, u.student_id, c.name as class_name
-                 FROM attendance a
-                 JOIN users u ON a.student_id = u.id
-                 JOIN classes c ON a.class_id = c.id
-                 WHERE c.institute_id = ?`;
-    const params = [institute_id];
+    const where = { class: { institute_id } };
+    if (class_id) where.class_id = Number(class_id);
+    if (date) {
+      where.date = new Date(date);
+    } else if (month) {
+      const [year, mon] = month.split('-');
+      where.date = { gte: new Date(Number(year), Number(mon) - 1, 1), lte: new Date(Number(year), Number(mon), 0, 23, 59, 59) };
+    }
 
-    if (class_id) { query += ' AND a.class_id = ?'; params.push(class_id); }
-    if (date) { query += ' AND a.date = ?'; params.push(date); }
-    if (month) { query += ' AND DATE_FORMAT(a.date, "%Y-%m") = ?'; params.push(month); }
+    const rows = await prisma.attendance.findMany({
+      where,
+      include: {
+        student: { select: { name: true, student_id: true } },
+        class: { select: { name: true } },
+      },
+      orderBy: [{ date: 'desc' }, { student: { name: 'asc' } }],
+    });
 
-    query += ' ORDER BY a.date DESC, u.name';
-    const [rows] = await pool.execute(query, params);
-    res.json({ success: true, data: rows });
+    const data = rows.map((r) => ({
+      ...r,
+      student_name: r.student.name,
+      student_id: r.student.student_id,
+      class_name: r.class.name,
+      student: undefined,
+      class: undefined,
+    }));
+
+    res.json({ success: true, data });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Server error.' });
   }
 };
 
-// Get income report
 exports.getIncomeReport = async (req, res) => {
   try {
     const institute_id = req.user.institute_id;
     const { month, class_id } = req.query;
 
-    let query = `SELECT p.*, u.name as student_name, u.student_id, c.name as class_name
-                 FROM payments p
-                 JOIN users u ON p.student_id = u.id
-                 JOIN classes c ON p.class_id = c.id
-                 WHERE p.institute_id = ?`;
-    const params = [institute_id];
+    const where = { institute_id };
+    if (month) where.month = month;
+    if (class_id) where.class_id = Number(class_id);
 
-    if (month) { query += ' AND p.month = ?'; params.push(month); }
-    if (class_id) { query += ' AND p.class_id = ?'; params.push(class_id); }
+    const rows = await prisma.payment.findMany({
+      where,
+      include: {
+        student: { select: { name: true, student_id: true } },
+        class: { select: { name: true } },
+      },
+      orderBy: [{ month: 'desc' }, { student: { name: 'asc' } }],
+    });
 
-    query += ' ORDER BY p.month DESC, u.name';
-    const [rows] = await pool.execute(query, params);
+    const summaryWhere = { institute_id };
+    if (month) summaryWhere.month = month;
 
-    const [[summary]] = await pool.execute(
-      `SELECT
-        COALESCE(SUM(CASE WHEN status = 'paid' THEN amount END), 0) as total_collected,
-        COALESCE(SUM(CASE WHEN status IN ('pending','overdue') THEN amount END), 0) as total_pending,
-        COUNT(CASE WHEN status = 'paid' THEN 1 END) as paid_count,
-        COUNT(CASE WHEN status IN ('pending','overdue') THEN 1 END) as pending_count
-       FROM payments WHERE institute_id = ? ${month ? 'AND month = ?' : ''}`,
-      month ? [institute_id, month] : [institute_id]
-    );
+    const [totalCollectedData, totalPendingData, paidCount, pendingCount] = await Promise.all([
+      prisma.payment.aggregate({ where: { ...summaryWhere, status: 'paid' }, _sum: { amount: true } }),
+      prisma.payment.aggregate({ where: { ...summaryWhere, status: { in: ['pending', 'overdue'] } }, _sum: { amount: true } }),
+      prisma.payment.count({ where: { ...summaryWhere, status: 'paid' } }),
+      prisma.payment.count({ where: { ...summaryWhere, status: { in: ['pending', 'overdue'] } } }),
+    ]);
 
-    res.json({ success: true, data: rows, summary });
+    const data = rows.map((r) => ({
+      ...r,
+      student_name: r.student.name,
+      student_id: r.student.student_id,
+      class_name: r.class.name,
+      student: undefined,
+      class: undefined,
+    }));
+
+    res.json({
+      success: true,
+      data,
+      summary: {
+        total_collected: totalCollectedData._sum.amount || 0,
+        total_pending: totalPendingData._sum.amount || 0,
+        paid_count: paidCount,
+        pending_count: pendingCount,
+      },
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Server error.' });

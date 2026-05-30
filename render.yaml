@@ -13,28 +13,22 @@ services:
         value: production
       - key: PORT
         value: 10000
-      # Database — use an external MySQL service (see README for free options)
-      - key: DB_HOST
-        sync: false      # set manually in Render dashboard
-      - key: DB_PORT
-        value: 3306
-      - key: DB_USER
-        sync: false
-      - key: DB_PASSWORD
-        sync: false
-      - key: DB_NAME
-        value: edulanka
+      # Supabase PostgreSQL (Prisma ORM)
+      - key: DATABASE_URL
+        sync: false      # set in Render dashboard
+      - key: DIRECT_URL
+        sync: false      # set in Render dashboard
       # Auth
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_EXPIRE
         value: 7d
-      # CORS — set to your Render frontend URL after deploy
+      # CORS
       - key: ALLOWED_ORIGINS
         value: https://edulanka-frontend.onrender.com
       - key: FRONTEND_URL
         value: https://edulanka-frontend.onrender.com
-      # Email (optional — leave blank to use console fallback in dev)
+      # Email (optional)
       - key: EMAIL_HOST
         value: smtp.gmail.com
       - key: EMAIL_PORT
@@ -57,22 +51,9 @@ services:
     buildCommand: npm install && npm run build
     staticPublishPath: build
     envVars:
-      # Must match your backend Render URL
       - key: REACT_APP_API_URL
         value: https://edulanka-api.onrender.com/api
     routes:
-      # SPA fallback — all routes serve index.html
       - type: rewrite
         source: /*
         destination: /index.html
-
-# ── Database ───────────────────────────────────────────────────────────────
-# Render free tier does NOT include MySQL.
-# Use one of these FREE external MySQL services:
-#   1. Aiven   — https://aiven.io          (free 1GB MySQL)
-#   2. Railway — https://railway.app        ($5/month free credits)
-#   3. PlanetScale — https://planetscale.com (free MySQL-compatible)
-#
-# After creating the DB:
-#   1. Run schema: backend/src/config/schema.sql
-#   2. Set DB_HOST / DB_USER / DB_PASSWORD in Render dashboard → Environment

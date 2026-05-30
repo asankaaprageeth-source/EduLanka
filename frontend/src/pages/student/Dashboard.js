@@ -3,7 +3,7 @@ import { Box, Grid, Paper, Typography, CircularProgress } from '@mui/material';
 import { School, EventNote, AttachMoney, Message } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import API from '../../services/api';
-import QRCode from 'qrcode.react';
+import { QRCodeSVG as QRCode } from 'qrcode.react';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -23,14 +23,16 @@ const Dashboard = () => {
     <Box>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5" fontWeight={700}>Welcome, {user?.name}</Typography>
-        <Typography variant="body2" color="text.secondary">Student ID: {user?.student_id}</Typography>
+        {stats?.student_id && (
+          <Typography variant="body2" color="text.secondary">Student ID: <strong>{stats.student_id}</strong></Typography>
+        )}
       </Box>
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={4}>
           <Paper sx={{ p: 3, borderRadius: 2, textAlign: 'center' }}>
             <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>My QR Code</Typography>
-            <QRCode value={JSON.stringify({ userId: user?.id, student_id: user?.student_id })} size={160} />
+            <QRCode value={JSON.stringify({ userId: user?.id, student_id: stats?.student_id })} size={160} />
             <Typography variant="caption" display="block" sx={{ mt: 1 }} color="text.secondary">
               Show this to mark attendance
             </Typography>

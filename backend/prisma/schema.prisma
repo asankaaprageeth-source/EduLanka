@@ -1,0 +1,309 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  student
+  teacher
+}
+
+enum ClassType {
+  hall
+  group
+  online
+}
+
+enum AttendanceStatus {
+  present
+  absent
+  late
+}
+
+enum MarkedBy {
+  qr_scan
+  manual
+}
+
+enum PaymentStatus {
+  paid
+  pending
+  overdue
+}
+
+enum SenderType {
+  institute
+  teacher
+}
+
+enum TargetType {
+  all
+  class
+  individual
+  teachers
+}
+
+enum RecipientType {
+  student
+  teacher
+}
+
+enum CorrectAnswer {
+  a
+  b
+  c
+  d
+}
+
+enum ConnectionStatus {
+  pending
+  accepted
+  rejected
+  disconnected
+}
+
+enum RequestedBy {
+  teacher
+  institute
+}
+
+model Institute {
+  id                 Int       @id @default(autoincrement())
+  name               String    @db.VarChar(200)
+  email              String    @unique @db.VarChar(150)
+  password           String    @db.VarChar(255)
+  phone              String?   @db.VarChar(20)
+  address            String?
+  logo               String?   @db.VarChar(255)
+  institute_code     String    @unique @db.VarChar(20)
+  is_active          Boolean   @default(true)
+  reset_token        String?
+  reset_token_expiry DateTime?
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  users    User[]
+  classes  Class[]
+  payments Payment[]
+  messages Message[]
+  exams    Exam[]
+
+  @@map("institutes")
+}
+
+model User {
+  id                 Int       @id @default(autoincrement())
+  institute_id       Int?
+  role               UserRole
+  name               String    @db.VarChar(200)
+  email              String?   @db.VarChar(150)
+  password           String    @db.VarChar(255)
+  phone              String?   @db.VarChar(20)
+  parent_phone       String?   @db.VarChar(20)
+  photo              String?   @db.VarChar(255)
+  qr_code            String?   @db.VarChar(255)
+  student_id         String?   @db.VarChar(50)
+  district           String?
+  city               String?
+  village            String?
+  subjects           String?
+  reset_token        String?
+  reset_token_expiry DateTime?
+  is_active          Boolean   @default(true)
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  institute          Institute?         @relation(fields: [institute_id], references: [id], onDelete: SetNull)
+  taught_classes     Class[]            @relation("TeacherClasses")
+  enrollments        ClassEnrollment[]
+  attendance         Attendance[]
+  payments           Payment[]
+  exam_results       ExamResult[]
+  message_recipients MessageRecipient[]
+
+  @@map("users")
+}
+
+model Class {
+  id           Int       @id @default(autoincrement())
+  institute_id Int
+  teacher_id   Int?
+  name         String    @db.VarChar(200)
+  grade        String?   @db.VarChar(50)
+  subject      String?   @db.VarChar(100)
+  monthly_fee  Decimal   @default(0) @db.Decimal(10, 2)
+  schedule     String?   @db.VarChar(255)
+  description  String?
+  al_year      Int?
+  class_day    String?   @db.VarChar(20)
+  start_time   String?   @db.VarChar(10)
+  end_time     String?   @db.VarChar(10)
+  class_type   ClassType @default(hall)
+  is_active    Boolean   @default(true)
+  created_at   DateTime  @default(now())
+
+  institute   Institute         @relation(fields: [institute_id], references: [id], onDelete: Cascade)
+  teacher     User?             @relation("TeacherClasses", fields: [teacher_id], references: [id], onDelete: SetNull)
+  enrollments ClassEnrollment[]
+  attendance  Attendance[]
+  payments    Payment[]
+  exams       Exam[]
+
+  @@map("classes")
+}
+
+model ClassEnrollment {
+  id            Int      @id @default(autoincrement())
+  class_id      Int
+  student_id    Int
+  enrolled_date DateTime @default(now()) @db.Date
+  is_active     Boolean  @default(true)
+
+  class   Class @relation(fields: [class_id], references: [id], onDelete: Cascade)
+  student User  @relation(fields: [student_id], references: [id], onDelete: Cascade)
+
+  @@unique([class_id, student_id])
+  @@map("class_enrollments")
+}
+
+model Attendance {
+  id         Int              @id @default(autoincrement())
+  class_id   Int
+  student_id Int
+  date       DateTime         @db.Date
+  status     AttendanceStatus @default(present)
+  marked_by  MarkedBy         @default(manual)
+  marked_at  DateTime         @default(now())
+
+  class   Class @relation(fields: [class_id], references: [id], onDelete: Cascade)
+  student User  @relation(fields: [student_id], references: [id], onDelete: Cascade)
+
+  @@unique([class_id, student_id, date])
+  @@map("attendance")
+}
+
+model Payment {
+  id           Int           @id @default(autoincrement())
+  student_id   Int
+  class_id     Int
+  institute_id Int
+  amount       Decimal       @db.Decimal(10, 2)
+  month        String        @db.VarChar(7)
+  paid_date    DateTime?     @db.Date
+  receipt_no   String?       @unique @db.VarChar(50)
+  status       PaymentStatus @default(pending)
+  notes        String?
+  created_at   DateTime      @default(now())
+
+  student   User      @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  class     Class     @relation(fields: [class_id], references: [id], onDelete: Cascade)
+  institute Institute @relation(fields: [institute_id], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model Message {
+  id           Int        @id @default(autoincrement())
+  institute_id Int
+  sender_id    Int?
+  sender_type  SenderType @default(institute)
+  subject      String     @db.VarChar(255)
+  body         String
+  target_type  TargetType @default(all)
+  target_id    Int?
+  created_at   DateTime   @default(now())
+
+  institute  Institute          @relation(fields: [institute_id], references: [id], onDelete: Cascade)
+  recipients MessageRecipient[]
+
+  @@map("messages")
+}
+
+model MessageRecipient {
+  id             Int           @id @default(autoincrement())
+  message_id     Int
+  recipient_id   Int
+  recipient_type RecipientType @default(student)
+  is_read        Boolean       @default(false)
+  read_at        DateTime?
+
+  message   Message @relation(fields: [message_id], references: [id], onDelete: Cascade)
+  recipient User    @relation(fields: [recipient_id], references: [id], onDelete: Cascade)
+
+  @@map("message_recipients")
+}
+
+model Exam {
+  id               Int       @id @default(autoincrement())
+  class_id         Int
+  teacher_id       Int?
+  institute_id     Int
+  title            String    @db.VarChar(255)
+  description      String?
+  duration_minutes Int       @default(60)
+  total_marks      Int       @default(100)
+  is_published     Boolean   @default(false)
+  start_time       DateTime?
+  end_time         DateTime?
+  created_at       DateTime  @default(now())
+
+  class     Class          @relation(fields: [class_id], references: [id], onDelete: Cascade)
+  institute Institute      @relation(fields: [institute_id], references: [id], onDelete: Cascade)
+  questions ExamQuestion[]
+  results   ExamResult[]
+
+  @@map("exams")
+}
+
+model ExamQuestion {
+  id             Int           @id @default(autoincrement())
+  exam_id        Int
+  question       String
+  option_a       String        @db.VarChar(500)
+  option_b       String        @db.VarChar(500)
+  option_c       String?       @db.VarChar(500)
+  option_d       String?       @db.VarChar(500)
+  correct_answer CorrectAnswer
+  marks          Int           @default(1)
+  order_num      Int           @default(0)
+
+  exam Exam @relation(fields: [exam_id], references: [id], onDelete: Cascade)
+
+  @@map("exam_questions")
+}
+
+model ExamResult {
+  id            Int      @id @default(autoincrement())
+  exam_id       Int
+  student_id    Int
+  score         Int      @default(0)
+  total_marks   Int      @default(0)
+  percentage    Decimal  @default(0) @db.Decimal(5, 2)
+  rank_position Int?
+  answers       Json?
+  submitted_at  DateTime @default(now())
+
+  exam    Exam @relation(fields: [exam_id], references: [id], onDelete: Cascade)
+  student User @relation(fields: [student_id], references: [id], onDelete: Cascade)
+
+  @@unique([exam_id, student_id])
+  @@map("exam_results")
+}
+
+model TeacherInstituteConnection {
+  id           Int              @id @default(autoincrement())
+  teacher_id   Int
+  institute_id Int
+  status       ConnectionStatus @default(pending)
+  requested_by RequestedBy
+  created_at   DateTime         @default(now())
+  updated_at   DateTime         @updatedAt
+
+  @@unique([teacher_id, institute_id])
+  @@map("teacher_institute_connections")
+}
