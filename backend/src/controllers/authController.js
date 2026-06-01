@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const QRCode = require('qrcode');
 const fs     = require('fs');
+const fs     = require('fs');
 const prisma = require('../config/prisma');
 require('dotenv').config();
 
