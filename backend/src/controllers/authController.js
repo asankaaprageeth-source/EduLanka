@@ -3,8 +3,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const QRCode = require('qrcode');
-const fs     = require('fs');
-const fs     = require('fs');
+const fs = require('fs');
 const prisma = require('../config/prisma');
 require('dotenv').config();
 
@@ -267,8 +266,8 @@ exports.registerUser = async (req, res) => {
     });
 
     if (role === 'student') {
-      fs.mkdirSync('./uploads', \{ recursive: true \});
-      const qrData = JSON.stringify(\{ userId: user.id, student_id, institute_id \});
+      fs.mkdirSync('./uploads', { recursive: true });
+      const qrData = JSON.stringify({ userId: user.id, student_id, institute_id });
       await QRCode.toFile(`./uploads/qr_${user.id}.png`, qrData);
       await prisma.user.update({ where: { id: user.id }, data: { qr_code: `qr_${user.id}.png` } });
     }
