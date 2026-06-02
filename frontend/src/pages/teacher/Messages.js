@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Box, Typography, Paper, List, ListItem, ListItemText,
-  Divider, CircularProgress, Chip, Button,
+  Divider, CircularProgress, Chip, Button, MenuItem,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
 } from '@mui/material';
 import { Send } from '@mui/icons-material';
@@ -56,9 +56,8 @@ const ComposeDialog = ({ open, onClose, classes, onSent }) => {
           onChange={(e) => setClassId(e.target.value)}
           error={!!errors.classId} helperText={errors.classId} fullWidth required
         >
-          {classes.map((c) => <TextField key={c.id} value={String(c.id)} label={c.name} />)}
           {classes.map((c) => (
-            <Box key={c.id} component="option" value={String(c.id)}>{c.name}</Box>
+            <MenuItem key={c.id} value={String(c.id)}>{c.name}</MenuItem>
           ))}
         </TextField>
         <TextField
