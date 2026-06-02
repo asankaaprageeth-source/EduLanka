@@ -86,7 +86,8 @@ const Register = () => {
             <Typography variant="h6" color="text.secondary">{roleLabels[role]}</Typography>
           </Box>
           <form onSubmit={handleSubmit}>
-            <TextField fullWidth label="Full Name" value={form.name}
+            <TextField fullWidth label={isInstitute ? "Institute Name" : "Full Name"}
+              placeholder={isInstitute ? "Institute Name" : undefined} value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })} sx={{ mb: 2 }} required />
             <TextField fullWidth label="Email" type="email" value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })} sx={{ mb: 2 }} required />
