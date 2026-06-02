@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { auth, authorize } = require('../middleware/auth');
-const pool = require('../config/database');
+const prisma = require('../config/prisma');
 const { recordPayment, generateMonthlyFees, getStudentPayments, updateOverdue } = require('../controllers/paymentController');
 
 router.post('/record', auth, authorize('institute'), recordPayment);
@@ -18,34 +18,33 @@ router.get('/class/:class_id', auth, authorize('institute', 'teacher'), async (r
     const institute_id = req.user.institute_id;
 
     if (req.user.role === 'teacher') {
-      const [[cls]] = await pool.execute(
-        'SELECT id FROM classes WHERE id = ? AND teacher_id = ? AND is_active = 1',
-        [class_id, req.user.id]
-      );
+      const cls = await prisma.class.findFirst({ where: { id: Number(class_id), teacher_id: req.user.id, is_active: true } });
       if (!cls) return res.status(404).json({ success: false, message: 'Class not found.' });
     }
 
-    let query = `SELECT p.*, u.name AS student_name, u.student_id AS student_no
-                 FROM payments p
-                 JOIN users u ON p.student_id = u.id
-                 WHERE p.class_id = ? AND p.institute_id = ?`;
-    const params = [class_id, institute_id];
+    const where = { class_id: Number(class_id), institute_id };
+    if (month) where.month = month;
 
-    if (month) { query += ' AND p.month = ?'; params.push(month); }
-    query += ' ORDER BY u.name, p.month DESC';
+    const payments = await prisma.payment.findMany({
+      where,
+      include: { student: { select: { name: true, student_id: true } } },
+      orderBy: [{ student: { name: 'asc' } }, { month: 'desc' }],
+    });
 
-    const [payments] = await pool.execute(query, params);
+    const data = payments.map((p) => ({
+      ...p,
+      student_name: p.student.name,
+      student_no: p.student.student_id,
+      student: undefined,
+    }));
 
-    const summary = payments.reduce(
-      (acc, p) => {
-        acc[p.status] = (acc[p.status] || 0) + 1;
-        acc[`${p.status}_amount`] = (acc[`${p.status}_amount`] || 0) + Number(p.amount);
-        return acc;
-      },
-      {}
-    );
+    const summary = data.reduce((acc, p) => {
+      acc[p.status] = (acc[p.status] || 0) + 1;
+      acc[`${p.status}_amount`] = (acc[`${p.status}_amount`] || 0) + Number(p.amount);
+      return acc;
+    }, {});
 
-    res.json({ success: true, data: payments, summary });
+    res.json({ success: true, data, summary });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Server error.' });
@@ -61,32 +60,29 @@ router.post('/class/:class_id/generate', auth, authorize('institute', 'teacher')
 
     if (!month) return res.status(400).json({ success: false, message: 'Month is required.' });
 
-    const [[cls]] = await pool.execute(
-      'SELECT id, monthly_fee FROM classes WHERE id = ? AND institute_id = ?',
-      [class_id, institute_id]
-    );
+    const cls = await prisma.class.findFirst({
+      where: { id: Number(class_id), institute_id },
+      select: { id: true, monthly_fee: true },
+    });
     if (!cls) return res.status(404).json({ success: false, message: 'Class not found.' });
-    if (Number(cls.monthly_fee) <= 0) {
-      return res.status(400).json({ success: false, message: 'This class has no monthly fee set.' });
+    if (Number(cls.monthly_fee) <= 0) return res.status(400).json({ success: false, message: 'This class has no monthly fee set.' });
+
+    const enrollments = await prisma.classEnrollment.findMany({
+      where: { class_id: Number(class_id), is_active: true },
+      select: { student_id: true },
+    });
+    if (enrollments.length === 0) return res.status(400).json({ success: false, message: 'No enrolled students in this class.' });
+
+    for (const e of enrollments) {
+      const existing = await prisma.payment.findFirst({ where: { student_id: e.student_id, class_id: Number(class_id), month } });
+      if (!existing) {
+        await prisma.payment.create({
+          data: { student_id: e.student_id, class_id: Number(class_id), institute_id, amount: cls.monthly_fee, month, status: 'pending' },
+        });
+      }
     }
 
-    const [students] = await pool.execute(
-      'SELECT student_id FROM class_enrollments WHERE class_id = ? AND is_active = 1',
-      [class_id]
-    );
-    if (students.length === 0) {
-      return res.status(400).json({ success: false, message: 'No enrolled students in this class.' });
-    }
-
-    for (const s of students) {
-      await pool.execute(
-        `INSERT IGNORE INTO payments (student_id, class_id, institute_id, amount, month, status)
-         VALUES (?, ?, ?, ?, ?, 'pending')`,
-        [s.student_id, class_id, institute_id, cls.monthly_fee, month]
-      );
-    }
-
-    res.json({ success: true, message: `Fee records generated for ${students.length} students.` });
+    res.json({ success: true, message: `Fee records generated for ${enrollments.length} students.` });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Server error.' });
@@ -105,15 +101,19 @@ router.post('/class/:class_id/record', auth, authorize('institute', 'teacher'), 
     }
 
     const receipt_no = `REC${Date.now()}`;
-    const paid_date = new Date().toISOString().split('T')[0];
+    const paid_date = new Date(new Date().toISOString().split('T')[0]);
 
-    await pool.execute(
-      `INSERT INTO payments (student_id, class_id, institute_id, amount, month, paid_date, receipt_no, status, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'paid', ?)
-       ON DUPLICATE KEY UPDATE amount = ?, paid_date = ?, receipt_no = ?, status = 'paid', notes = ?`,
-      [student_id, class_id, institute_id, amount, month, paid_date, receipt_no, notes || null,
-       amount, paid_date, receipt_no, notes || null]
-    );
+    const existing = await prisma.payment.findFirst({ where: { student_id: Number(student_id), class_id: Number(class_id), month } });
+    if (existing) {
+      await prisma.payment.update({
+        where: { id: existing.id },
+        data: { amount: Number(amount), paid_date, receipt_no, status: 'paid', notes: notes || null },
+      });
+    } else {
+      await prisma.payment.create({
+        data: { student_id: Number(student_id), class_id: Number(class_id), institute_id, amount: Number(amount), month, paid_date, receipt_no, status: 'paid', notes: notes || null },
+      });
+    }
 
     res.json({ success: true, message: 'Payment recorded.', data: { receipt_no, paid_date } });
   } catch (err) {

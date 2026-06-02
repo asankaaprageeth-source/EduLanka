@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { auth, authorize } = require('../middleware/auth');
-const pool = require('../config/database');
+const prisma = require('../config/prisma');
 const { createExam, publishExam, getStudentExams, getExamQuestions, submitExam, getExamResults } = require('../controllers/examController');
 
 router.post('/', auth, authorize('institute', 'teacher'), createExam);
@@ -13,22 +13,34 @@ router.get('/class/:class_id', auth, authorize('institute', 'teacher'), async (r
   try {
     const { class_id } = req.params;
     const institute_id = req.user.institute_id;
-    const [exams] = await pool.execute(
-      `SELECT e.id, e.title, e.description, e.duration_minutes, e.total_marks,
-              e.is_published, e.start_time, e.end_time, e.created_at,
-              COUNT(DISTINCT eq.id)                                         AS question_count,
-              COUNT(DISTINCT er.id)                                         AS result_count,
-              ROUND(AVG(er.percentage), 1)                                  AS avg_percentage,
-              COUNT(CASE WHEN er.percentage >= 50 THEN 1 END)               AS pass_count
-       FROM exams e
-       LEFT JOIN exam_questions eq ON eq.exam_id = e.id
-       LEFT JOIN exam_results   er ON er.exam_id = e.id
-       WHERE e.class_id = ? AND e.institute_id = ?
-       GROUP BY e.id
-       ORDER BY e.created_at DESC`,
-      [class_id, institute_id]
-    );
-    res.json({ success: true, data: exams });
+
+    const exams = await prisma.exam.findMany({
+      where: { class_id: Number(class_id), institute_id },
+      include: {
+        _count: { select: { questions: true, results: true } },
+        results: { select: { percentage: true } },
+      },
+      orderBy: { created_at: 'desc' },
+    });
+
+    const data = exams.map((e) => {
+      const percentages = e.results.map((r) => Number(r.percentage));
+      const avg_percentage = percentages.length
+        ? parseFloat((percentages.reduce((a, b) => a + b, 0) / percentages.length).toFixed(1))
+        : null;
+      return {
+        id: e.id, title: e.title, description: e.description,
+        duration_minutes: e.duration_minutes, total_marks: e.total_marks,
+        is_published: e.is_published, start_time: e.start_time,
+        end_time: e.end_time, created_at: e.created_at,
+        question_count: e._count.questions,
+        result_count: e._count.results,
+        avg_percentage,
+        pass_count: percentages.filter((p) => p >= 50).length,
+      };
+    });
+
+    res.json({ success: true, data });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Server error.' });
@@ -40,12 +52,11 @@ router.delete('/:exam_id', auth, authorize('institute', 'teacher'), async (req, 
   try {
     const { exam_id } = req.params;
     const institute_id = req.user.institute_id;
-    const [[exam]] = await pool.execute(
-      'SELECT id FROM exams WHERE id = ? AND institute_id = ?',
-      [exam_id, institute_id]
-    );
+
+    const exam = await prisma.exam.findFirst({ where: { id: Number(exam_id), institute_id } });
     if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
-    await pool.execute('DELETE FROM exams WHERE id = ?', [exam_id]);
+
+    await prisma.exam.delete({ where: { id: Number(exam_id) } });
     res.json({ success: true, message: 'Exam deleted.' });
   } catch (err) {
     console.error(err);
