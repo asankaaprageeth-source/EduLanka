@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { auth, authorize } = require('../middleware/auth');
-const pool = require('../config/database');
+const prisma = require('../config/prisma');
 const { sendMessage, getInbox, getSentMessages, markRead } = require('../controllers/messageController');
 
 router.post('/send', auth, authorize('institute', 'teacher'), sendMessage);
@@ -16,19 +16,29 @@ router.get('/class/:class_id', auth, authorize('institute', 'teacher'), async (r
     const institute_id = req.user.institute_id;
     const sender_id = req.user.role === 'teacher' ? req.user.id : null;
 
-    let query = `SELECT m.id, m.subject, m.body, m.created_at, m.target_type,
-                        COUNT(mr.id)       AS recipient_count,
-                        SUM(mr.is_read)    AS read_count
-                 FROM messages m
-                 LEFT JOIN message_recipients mr ON m.id = mr.message_id
-                 WHERE m.institute_id = ? AND m.target_type = 'class' AND m.target_id = ?`;
-    const params = [institute_id, class_id];
+    const where = { institute_id, target_type: 'class', target_id: Number(class_id) };
+    if (sender_id) where.sender_id = sender_id;
 
-    if (sender_id) { query += ' AND m.sender_id = ?'; params.push(sender_id); }
-    query += ' GROUP BY m.id ORDER BY m.created_at DESC';
+    const messages = await prisma.message.findMany({
+      where,
+      include: {
+        _count: { select: { recipients: true } },
+        recipients: { select: { is_read: true } },
+      },
+      orderBy: { created_at: 'desc' },
+    });
 
-    const [messages] = await pool.execute(query, params);
-    res.json({ success: true, data: messages });
+    const data = messages.map((m) => ({
+      id: m.id,
+      subject: m.subject,
+      body: m.body,
+      created_at: m.created_at,
+      target_type: m.target_type,
+      recipient_count: m._count.recipients,
+      read_count: m.recipients.filter((r) => r.is_read).length,
+    }));
+
+    res.json({ success: true, data });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Server error.' });
