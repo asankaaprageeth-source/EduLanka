@@ -13,6 +13,7 @@ import { ExamsDialog } from './ClassExams';
 import { PaymentsDialog } from './ClassPayments';
 import { MessagesDialog } from './ClassMessages';
 import { ReportsDialog } from './ClassReports';
+import ClassStudentList from '../../components/ClassStudentList';
 
 const CLASS_TYPES = [
   { value: 'hall', label: 'Hall Classes' },
@@ -706,6 +707,7 @@ const Classes = () => {
   const [editData, setEditData] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [studentListClass, setStudentListClass] = useState(null);
   const [enrollClass, setEnrollClass] = useState(null);
   const [attendanceClass, setAttendanceClass] = useState(null);
   const [examsClass, setExamsClass] = useState(null);
@@ -844,8 +846,9 @@ const Classes = () => {
                       size="small"
                       variant="outlined"
                       color={Number(cls.student_count) > 0 ? 'primary' : 'default'}
-                      onClick={() => setEnrollClass(cls)}
+                      onClick={() => setStudentListClass(cls)}
                       sx={{ cursor: 'pointer' }}
+                      title="View enrolled students"
                     />
                   </TableCell>
                   <TableCell align="right">
@@ -903,6 +906,12 @@ const Classes = () => {
           </Table>
         )}
       </Paper>
+
+      <ClassStudentList
+        open={!!studentListClass}
+        onClose={() => setStudentListClass(null)}
+        classData={studentListClass}
+      />
 
       <ClassFormDialog
         open={formOpen}

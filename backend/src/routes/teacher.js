@@ -229,7 +229,7 @@ router.get('/classes/:id/students', auth, authorize('teacher'), async (req, res)
 
     const enrollments = await prisma.classEnrollment.findMany({
       where: { class_id: Number(id), is_active: true },
-      include: { student: { select: { id: true, name: true, student_id: true, phone: true, photo: true } } },
+      include: { student: { select: { id: true, name: true, email: true, student_id: true, phone: true, photo: true } } },
       orderBy: { student: { name: 'asc' } },
     });
 
