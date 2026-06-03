@@ -27,6 +27,7 @@ import TeacherMessages from './pages/teacher/Messages';
 import TeacherReports from './pages/teacher/Reports';
 
 import Profile from './pages/Profile';
+import AdminDashboard from './pages/admin/Dashboard';
 
 import StudentDashboard from './pages/student/Dashboard';
 import StudentClasses from './pages/student/Classes';
@@ -53,6 +54,9 @@ const AppRoutes = () => {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password/:token" element={<ResetPassword />} />
       <Route path="/register/:role" element={<Register />} />
+
+      {/* Admin Routes */}
+      <Route path="/admin/dashboard" element={<ProtectedRoute role="admin"><AdminDashboard /></ProtectedRoute>} />
 
       {/* Institute Routes */}
       <Route path="/institute/dashboard" element={<ProtectedRoute role="institute"><InstituteDashboard /></ProtectedRoute>} />

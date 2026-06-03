@@ -9,7 +9,8 @@ import {
 } from '@mui/material';
 import {
   Menu as MenuIcon, Dashboard, People, School, Assignment,
-  AttachMoney, Message, ExitToApp, BarChart, PersonAdd, EventNote, AccountCircle
+  AttachMoney, Message, ExitToApp, BarChart, PersonAdd, EventNote, AccountCircle,
+  AdminPanelSettings
 } from '@mui/icons-material';
 
 const DRAWER_WIDTH = 240;
@@ -33,6 +34,7 @@ const navItems = {
     { label: 'Messages', icon: <Message />, path: '/teacher/messages' },
     { label: 'Reports', icon: <BarChart />, path: '/teacher/reports' },
   ],
+  admin: [{ label: 'Dashboard', icon: <AdminPanelSettings />, path: '/admin/dashboard' }],
   student: [
     { label: 'Dashboard', icon: <Dashboard />, path: '/student/dashboard' },
     { label: 'My Classes', icon: <School />, path: '/student/classes' },
@@ -43,7 +45,7 @@ const navItems = {
   ],
 };
 
-const roleColors = { institute: '#1976d2', teacher: '#f57c00', student: '#388e3c' };
+const roleColors = { institute: '#1976d2', teacher: '#f57c00', student: '#388e3c', admin: '#6a1b9a' };
 
 const Layout = ({ children }) => {
   const { user, logout } = useAuth();
@@ -83,7 +85,7 @@ const Layout = ({ children }) => {
   const drawer = (
     <Box>
       <Box sx={{ p: 2, bgcolor: color, color: 'white', textAlign: 'center' }}>
-        <School sx={{ fontSize: 36 }} />
+        {user.role === 'admin' ? <AdminPanelSettings sx={{ fontSize: 36 }} /> : <School sx={{ fontSize: 36 }} />}
         <Typography variant="h6" fontWeight={700}>EduLanka</Typography>
         <Typography variant="caption" sx={{ opacity: 0.85, textTransform: 'capitalize' }}>
           {user.role} Panel
