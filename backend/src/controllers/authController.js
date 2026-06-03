@@ -341,11 +341,77 @@ exports.getProfile = async (req, res) => {
     } else {
       data = await prisma.user.findUnique({
         where: { id },
-        select: { id: true, institute_id: true, role: true, name: true, email: true, phone: true, parent_phone: true, photo: true, qr_code: true, student_id: true, created_at: true },
+        select: { id: true, institute_id: true, role: true, name: true, email: true, phone: true, parent_phone: true, photo: true, qr_code: true, student_id: true, district: true, city: true, village: true, subjects: true, created_at: true },
       });
     }
 
     res.json({ success: true, data: { ...data, role } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server error.' });
+  }
+};
+
+exports.updateProfile = async (req, res) => {
+  try {
+    const { id, role } = req.user;
+    const { name, email, phone, parent_phone, district, city, village, subjects } = req.body;
+
+    if (!name?.trim()) {
+      return res.status(400).json({ success: false, message: 'Name is required.' });
+    }
+
+    const data = {
+      name: name.trim(),
+      email: email?.trim() || null,
+      phone: phone?.trim() || null,
+      district: district?.trim() || null,
+      city: city?.trim() || null,
+      village: village?.trim() || null,
+    };
+
+    if (role === 'student') {
+      data.parent_phone = parent_phone?.trim() || null;
+    }
+    if (role === 'teacher' && Array.isArray(subjects)) {
+      data.subjects = subjects.length ? JSON.stringify(subjects) : null;
+    }
+
+    const updated = await prisma.user.update({
+      where: { id },
+      data,
+      select: { id: true, institute_id: true, role: true, name: true, email: true, phone: true, parent_phone: true, photo: true, student_id: true, district: true, city: true, village: true, subjects: true },
+    });
+
+    res.json({ success: true, data: { ...updated, role }, message: 'Profile updated successfully.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server error.' });
+  }
+};
+
+exports.changePassword = async (req, res) => {
+  try {
+    const { id, role } = req.user;
+    const { current_password, new_password } = req.body;
+
+    if (!current_password || !new_password) {
+      return res.status(400).json({ success: false, message: 'Both current and new password are required.' });
+    }
+    if (new_password.length < 8) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 8 characters.' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id }, select: { password: true } });
+    const match = await bcrypt.compare(current_password, user.password);
+    if (!match) {
+      return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
+    }
+
+    const hashed = await bcrypt.hash(new_password, 12);
+    await prisma.user.update({ where: { id }, data: { password: hashed } });
+
+    res.json({ success: true, message: 'Password changed successfully.' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Server error.' });

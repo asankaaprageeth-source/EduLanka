@@ -8,7 +8,7 @@ import {
 } from '@mui/material';
 import {
   Menu as MenuIcon, Dashboard, People, School, Assignment,
-  AttachMoney, Message, ExitToApp, BarChart, PersonAdd, EventNote
+  AttachMoney, Message, ExitToApp, BarChart, PersonAdd, EventNote, AccountCircle
 } from '@mui/icons-material';
 
 const DRAWER_WIDTH = 240;
@@ -117,6 +117,11 @@ const Layout = ({ children }) => {
               </Box>
             </MenuItem>
             <Divider />
+            {(user.role === 'student' || user.role === 'teacher') && (
+              <MenuItem onClick={() => { setAnchorEl(null); navigate(`/${user.role}/profile`); }}>
+                <AccountCircle sx={{ mr: 1, fontSize: 20 }} /> My Profile
+              </MenuItem>
+            )}
             <MenuItem onClick={handleLogout} sx={{ color: 'error.main' }}>
               <ExitToApp sx={{ mr: 1, fontSize: 20 }} /> Logout
             </MenuItem>

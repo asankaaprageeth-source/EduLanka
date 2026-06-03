@@ -26,6 +26,8 @@ import TeacherExams from './pages/teacher/Exams';
 import TeacherMessages from './pages/teacher/Messages';
 import TeacherReports from './pages/teacher/Reports';
 
+import Profile from './pages/Profile';
+
 import StudentDashboard from './pages/student/Dashboard';
 import StudentClasses from './pages/student/Classes';
 import StudentAttendance from './pages/student/Attendance';
@@ -69,6 +71,10 @@ const AppRoutes = () => {
       <Route path="/teacher/exams" element={<ProtectedRoute role="teacher"><TeacherExams /></ProtectedRoute>} />
       <Route path="/teacher/messages" element={<ProtectedRoute role="teacher"><TeacherMessages /></ProtectedRoute>} />
       <Route path="/teacher/reports" element={<ProtectedRoute role="teacher"><TeacherReports /></ProtectedRoute>} />
+
+      {/* Shared profile route (student + teacher) */}
+      <Route path="/student/profile" element={<ProtectedRoute role="student"><Profile /></ProtectedRoute>} />
+      <Route path="/teacher/profile" element={<ProtectedRoute role="teacher"><Profile /></ProtectedRoute>} />
 
       {/* Student Routes */}
       <Route path="/student/dashboard" element={<ProtectedRoute role="student"><StudentDashboard /></ProtectedRoute>} />
