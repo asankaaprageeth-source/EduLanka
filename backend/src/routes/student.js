@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
 const { auth, authorize } = require('../middleware/auth');
+const { upload, resizeProfilePic } = require('../middleware/upload');
 const prisma = require('../config/prisma');
 
 router.get('/dashboard', auth, authorize('student'), async (req, res) => {
@@ -162,6 +165,24 @@ router.delete('/classes/:classId', auth, authorize('student'), async (req, res) 
     });
 
     res.json({ success: true, message: 'Left class successfully.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server error.' });
+  }
+});
+
+router.post('/profile/upload-pic', auth, authorize('student'), upload.single('photo'), resizeProfilePic, async (req, res) => {
+  try {
+    if (!req.file?.filename) return res.status(400).json({ success: false, message: 'No image uploaded.' });
+
+    const existing = await prisma.user.findUnique({ where: { id: req.user.id }, select: { photo: true } });
+    if (existing?.photo) {
+      const oldPath = path.join(__dirname, '../../uploads', existing.photo);
+      try { if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath); } catch (_) {}
+    }
+
+    await prisma.user.update({ where: { id: req.user.id }, data: { photo: req.file.filename } });
+    res.json({ success: true, photo: req.file.filename, message: 'Profile picture updated.' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Server error.' });

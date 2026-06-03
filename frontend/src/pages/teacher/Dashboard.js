@@ -4,6 +4,7 @@ import {
   Avatar, Divider, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, InputAdornment, IconButton, Skeleton, Badge, Tooltip,
 } from '@mui/material';
+import ProfilePicUpload from '../../components/ProfilePicUpload';
 import {
   School, People, EventNote, Message, Business, Add, Search,
   CheckCircle, Close, Warning, LinkOff, Notifications, HourglassEmpty,
@@ -226,6 +227,16 @@ const Dashboard = () => {
           </Tooltip>
         )}
       </Box>
+
+      {/* Profile Card */}
+      <Paper sx={{ p: 3, borderRadius: 2, mb: 3, display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
+        <ProfilePicUpload role="teacher" />
+        <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
+        <Box>
+          <Typography variant="h6" fontWeight={700}>{user?.name}</Typography>
+          <Typography variant="body2" color="text.secondary">Teacher</Typography>
+        </Box>
+      </Paper>
 
       {/* Stat Cards */}
       <Grid container spacing={3}>

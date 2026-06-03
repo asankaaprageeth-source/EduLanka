@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Grid, Paper, Typography, CircularProgress } from '@mui/material';
+import { Box, Grid, Paper, Typography, CircularProgress, Divider } from '@mui/material';
 import { School, EventNote, AttachMoney, Message } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import API from '../../services/api';
 import { QRCodeSVG as QRCode } from 'qrcode.react';
+import ProfilePicUpload from '../../components/ProfilePicUpload';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -23,13 +24,18 @@ const Dashboard = () => {
     <Box>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5" fontWeight={700}>Welcome, {user?.name}</Typography>
-        {stats?.student_id && (
-          <Typography variant="body2" color="text.secondary">Student ID: <strong>{stats.student_id}</strong></Typography>
-        )}
       </Box>
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={4}>
+          <Paper sx={{ p: 3, borderRadius: 2, textAlign: 'center', mb: 2 }}>
+            <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>My Profile</Typography>
+            <ProfilePicUpload role="student" />
+            <Typography variant="body2" fontWeight={600} sx={{ mt: 1.5 }}>{user?.name}</Typography>
+            {stats?.student_id && (
+              <Typography variant="caption" color="text.secondary">ID: {stats.student_id}</Typography>
+            )}
+          </Paper>
           <Paper sx={{ p: 3, borderRadius: 2, textAlign: 'center' }}>
             <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>My QR Code</Typography>
             <QRCode value={JSON.stringify({ userId: user?.id, student_id: stats?.student_id })} size={160} />
