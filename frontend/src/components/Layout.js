@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import API from '../services/api';
 import {
   Box, Drawer, AppBar, Toolbar, Typography, List, ListItem,
   ListItemIcon, ListItemText, IconButton, Avatar, Menu, MenuItem,
@@ -53,6 +54,22 @@ const Layout = ({ children }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
+  const [unreadMessages, setUnreadMessages] = useState(0);
+
+  const fetchUnread = useCallback(() => {
+    if (user?.role === 'student' || user?.role === 'teacher') {
+      API.get('/messages/unread-count')
+        .then((r) => setUnreadMessages(r.data.count || 0))
+        .catch(() => {});
+    }
+  }, [user?.role]);
+
+  useEffect(() => {
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 30000);
+    return () => clearInterval(interval);
+  }, [fetchUnread]);
+
   if (!user) return null;
 
   const items = navItems[user.role] || [];
@@ -74,24 +91,35 @@ const Layout = ({ children }) => {
       </Box>
       <Divider />
       <List>
-        {items.map((item) => (
-          <ListItem
-            key={item.path}
-            button
-            component={Link}
-            to={item.path}
-            selected={location.pathname === item.path}
-            onClick={() => isMobile && setMobileOpen(false)}
-            sx={{
-              '&.Mui-selected': { bgcolor: `${color}15`, borderRight: `3px solid ${color}` },
-              '&.Mui-selected .MuiListItemIcon-root': { color },
-              '&.Mui-selected .MuiListItemText-root': { color },
-            }}
-          >
-            <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
-            <ListItemText primary={item.label} />
-          </ListItem>
-        ))}
+        {items.map((item) => {
+          const isMessages = item.label === 'Messages';
+          const showBadge  = isMessages && unreadMessages > 0;
+          return (
+            <ListItem
+              key={item.path}
+              button
+              component={Link}
+              to={item.path}
+              selected={location.pathname === item.path}
+              onClick={() => {
+                if (isMobile) setMobileOpen(false);
+                if (isMessages) setUnreadMessages(0);
+              }}
+              sx={{
+                '&.Mui-selected': { bgcolor: `${color}15`, borderRight: `3px solid ${color}` },
+                '&.Mui-selected .MuiListItemIcon-root': { color },
+                '&.Mui-selected .MuiListItemText-root': { color },
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 40 }}>
+                <Badge badgeContent={showBadge ? unreadMessages : 0} color="error" max={99}>
+                  {item.icon}
+                </Badge>
+              </ListItemIcon>
+              <ListItemText primary={item.label} />
+            </ListItem>
+          );
+        })}
       </List>
     </Box>
   );

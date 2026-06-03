@@ -4,6 +4,18 @@ const { auth, authorize } = require('../middleware/auth');
 const prisma = require('../config/prisma');
 const { sendMessage, getInbox, getSentMessages, markRead } = require('../controllers/messageController');
 
+router.get('/unread-count', auth, authorize('student', 'teacher'), async (req, res) => {
+  try {
+    const count = await prisma.messageRecipient.count({
+      where: { recipient_id: req.user.id, is_read: false },
+    });
+    res.json({ success: true, count });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server error.' });
+  }
+});
+
 router.post('/send', auth, authorize('institute', 'teacher'), sendMessage);
 router.get('/inbox', auth, authorize('student', 'teacher'), getInbox);
 router.get('/sent', auth, authorize('institute', 'teacher'), getSentMessages);
