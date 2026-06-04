@@ -394,27 +394,29 @@ exports.changePassword = async (req, res) => {
   try {
     const { id, role } = req.user;
     const { current_password, new_password } = req.body;
-
-    if (!current_password || !new_password) {
+    if (!current_password || !new_password)
       return res.status(400).json({ success: false, message: 'Both current and new password are required.' });
-    }
-    if (new_password.length < 8) {
+    if (new_password.length < 8)
       return res.status(400).json({ success: false, message: 'New password must be at least 8 characters.' });
-    }
 
-    const user = await prisma.user.findUnique({ where: { id }, select: { password: true } });
-    const match = await bcrypt.compare(current_password, user.password);
-    if (!match) {
-      return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
+    let record;
+    if (role === 'institute') {
+      record = await prisma.institute.findUnique({ where: { id }, select: { password: true } });
+    } else {
+      record = await prisma.user.findUnique({ where: { id }, select: { password: true } });
     }
+    if (!record) return res.status(404).json({ success: false, message: 'Account not found.' });
+
+    const match = await bcrypt.compare(current_password, record.password);
+    if (!match) return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
 
     const hashed = await bcrypt.hash(new_password, 12);
-    await prisma.user.update({ where: { id }, data: { password: hashed } });
-
+    if (role === 'institute') {
+      await prisma.institute.update({ where: { id }, data: { password: hashed } });
+    } else {
+      await prisma.user.update({ where: { id }, data: { password: hashed } });
+    }
     res.json({ success: true, message: 'Password changed successfully.' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: 'Server error.' });
-  }
+  } catch (err) { console.error(err); res.status(500).json({ success: false, message: 'Server error.' }); }
 };
 

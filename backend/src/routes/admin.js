@@ -1,6 +1,10 @@
 const express = require('express');
 const router  = express.Router();
-const { adminLogin, getAdminStats, getAllInstitutes, getAllUsers, toggleInstituteStatus, toggleUserStatus } = require('../controllers/adminController');
+const {
+  adminLogin, getAdminStats, getAllInstitutes, getAllUsers,
+  toggleInstituteStatus, toggleUserStatus,
+  resetUserPassword, resetInstitutePassword,
+} = require('../controllers/adminController');
 const { auth } = require('../middleware/auth');
 
 const adminOnly = (req, res, next) => {
@@ -8,11 +12,13 @@ const adminOnly = (req, res, next) => {
   next();
 };
 
-router.post('/login',                        adminLogin);
-router.get('/stats',        auth, adminOnly, getAdminStats);
-router.get('/institutes',   auth, adminOnly, getAllInstitutes);
-router.get('/users',        auth, adminOnly, getAllUsers);
-router.patch('/institutes/:id/toggle', auth, adminOnly, toggleInstituteStatus);
-router.patch('/users/:id/toggle',      auth, adminOnly, toggleUserStatus);
+router.post('/login',                              adminLogin);
+router.get('/stats',              auth, adminOnly, getAdminStats);
+router.get('/institutes',         auth, adminOnly, getAllInstitutes);
+router.get('/users',              auth, adminOnly, getAllUsers);
+router.patch('/institutes/:id/toggle',         auth, adminOnly, toggleInstituteStatus);
+router.patch('/users/:id/toggle',              auth, adminOnly, toggleUserStatus);
+router.patch('/institutes/:id/reset-password', auth, adminOnly, resetInstitutePassword);
+router.patch('/users/:id/reset-password',      auth, adminOnly, resetUserPassword);
 
 module.exports = router;

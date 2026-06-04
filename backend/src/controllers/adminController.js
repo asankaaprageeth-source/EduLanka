@@ -75,3 +75,35 @@ exports.toggleUserStatus = async (req, res) => {
     res.json({ success: true, message: `User ${updated.is_active ? 'activated' : 'deactivated'}.` });
   } catch (err) { console.error(err); res.status(500).json({ success: false, message: 'Server error.' }); }
 };
+
+// PATCH /api/admin/users/:id/reset-password
+exports.resetUserPassword = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.length < 6)
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
+    const bcrypt = require('bcryptjs');
+    const hashed = await bcrypt.hash(newPassword, 12);
+    const user = await prisma.user.findUnique({ where: { id: parseInt(id) } });
+    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+    await prisma.user.update({ where: { id: parseInt(id) }, data: { password: hashed } });
+    res.json({ success: true, message: 'User password reset successfully.' });
+  } catch (err) { console.error(err); res.status(500).json({ success: false, message: 'Server error.' }); }
+};
+
+// PATCH /api/admin/institutes/:id/reset-password
+exports.resetInstitutePassword = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.length < 6)
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
+    const bcrypt = require('bcryptjs');
+    const hashed = await bcrypt.hash(newPassword, 12);
+    const inst = await prisma.institute.findUnique({ where: { id: parseInt(id) } });
+    if (!inst) return res.status(404).json({ success: false, message: 'Institute not found.' });
+    await prisma.institute.update({ where: { id: parseInt(id) }, data: { password: hashed } });
+    res.json({ success: true, message: 'Institute password reset successfully.' });
+  } catch (err) { console.error(err); res.status(500).json({ success: false, message: 'Server error.' }); }
+};

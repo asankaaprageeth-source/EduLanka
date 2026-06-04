@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import ChangePasswordDialog from './ChangePasswordDialog';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import API from '../services/api';
@@ -10,7 +11,7 @@ import {
 import {
   Menu as MenuIcon, Dashboard, People, School, Assignment,
   AttachMoney, Message, ExitToApp, BarChart, PersonAdd, EventNote, AccountCircle,
-  AdminPanelSettings
+  AdminPanelSettings, LockReset
 } from '@mui/icons-material';
 
 const DRAWER_WIDTH = 240;
@@ -53,6 +54,7 @@ const Layout = ({ children }) => {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
+  const [pwDialog, setPwDialog] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -152,6 +154,11 @@ const Layout = ({ children }) => {
                 <AccountCircle sx={{ mr: 1, fontSize: 20 }} /> My Profile
               </MenuItem>
             )}
+            {user.role !== 'admin' && (
+              <MenuItem onClick={() => { setAnchorEl(null); setPwDialog(true); }}>
+                <LockReset sx={{ mr: 1, fontSize: 20 }} /> Change Password
+              </MenuItem>
+            )}
             <MenuItem onClick={handleLogout} sx={{ color: 'error.main' }}>
               <ExitToApp sx={{ mr: 1, fontSize: 20 }} /> Logout
             </MenuItem>
@@ -171,6 +178,7 @@ const Layout = ({ children }) => {
       <Box component="main" sx={{ flexGrow: 1, p: 3, mt: 8, ml: { md: `${DRAWER_WIDTH}px` } }}>
         {children}
       </Box>
+      {user.role !== 'admin' && <ChangePasswordDialog open={pwDialog} onClose={() => setPwDialog(false)} />}
     </Box>
   );
 };
