@@ -81,37 +81,55 @@ const EnrollExistingStudentModal = ({ open, onClose, preClassId }) => {
     } finally { setSearchLoading(false); }
   };
 
+  const stopScanner = () => {
+    try {
+      if (scannerRef.current) {
+        scannerRef.current.reset();
+        scannerRef.current = null;
+      }
+    } catch {}
+    if (videoRef.current?.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach(t => t.stop());
+      videoRef.current.srcObject = null;
+    }
+    setScanning(false);
+  };
+
   const startScanner = async () => {
     setScanning(true);
     try {
       const { BrowserMultiFormatReader } = await import('@zxing/browser');
-      const reader = new BrowserMultiFormatReader();
-      scannerRef.current = reader;
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-      if (videoRef.current) videoRef.current.srcObject = stream;
-      reader.decodeFromVideoElement(videoRef.current, (result, err) => {
-        if (result) {
-          const text = result.getText();
-          stopScanner();
-          findByIdOrQR(text);
+      const codeReader = new BrowserMultiFormatReader();
+      scannerRef.current = codeReader;
+
+      const videoInputDevices = await BrowserMultiFormatReader.listVideoInputDevices();
+      const selectedDeviceId = videoInputDevices.find(d =>
+        d.label.toLowerCase().includes('back') ||
+        d.label.toLowerCase().includes('rear') ||
+        d.label.toLowerCase().includes('environment')
+      )?.deviceId || videoInputDevices[0]?.deviceId;
+
+      if (videoInputDevices.length === 0) throw new Error('No camera found');
+
+      await codeReader.decodeFromVideoDevice(
+        selectedDeviceId || undefined,
+        videoRef.current,
+        (result, err, controls) => {
+          if (result) {
+            const text = result.getText();
+            controls.stop();
+            stopScanner();
+            findByIdOrQR(text);
+          }
+          // ignore err - fires continuously when no QR in frame
         }
-      });
-    } catch {
+      );
+    } catch (err) {
+      console.error('QR scanner error:', err);
       setScanning(false);
-      toast.error('Camera not available.');
+      toast.error('Camera error: ' + (err.message || 'Could not start scanner'));
       setTab(2);
     }
-  };
-
-  const stopScanner = () => {
-    try {
-      if (scannerRef.current) { scannerRef.current.reset?.(); scannerRef.current = null; }
-      if (videoRef.current?.srcObject) {
-        videoRef.current.srcObject.getTracks().forEach(t => t.stop());
-        videoRef.current.srcObject = null;
-      }
-    } catch {}
-    setScanning(false);
   };
 
   const toggleStudent = (id) => {
@@ -257,7 +275,7 @@ const EnrollExistingStudentModal = ({ open, onClose, preClassId }) => {
                   </Button>
                 ) : (
                   <Box sx={{ position: 'relative', borderRadius: 2, overflow: 'hidden', bgcolor: '#000', mb: 2 }}>
-                    <video ref={videoRef} autoPlay playsInline style={{ width: '100%', maxHeight: 260, display: 'block' }} />
+                    <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', maxHeight: 260, display: 'block' }} />
                     <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                       <Box sx={{ width: 180, height: 180, border: '3px solid #1976d2', borderRadius: 2,
                         boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)' }} />
