@@ -9,6 +9,7 @@ import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import API from '../../services/api';
 import QrScannerModal from '../../components/QrScannerModal';
+import QrStudentEnrollModal from '../../components/QrStudentEnrollModal';
 
 // ── QR View Dialog ─────────────────────────────────────────────────────────────
 
@@ -63,6 +64,7 @@ const Students = () => {
   const [search, setSearch] = useState('');
   const [qrStudent, setQrStudent] = useState(null);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [enrollOpen, setEnrollOpen] = useState(false);
   const [highlightedId, setHighlightedId] = useState(null);
   const highlightRowRef = useRef(null);
 
@@ -119,6 +121,14 @@ const Students = () => {
             onClick={() => { setHighlightedId(null); setScannerOpen(true); }}
           >
             Scan QR
+          </Button>
+          <Button
+            variant="contained"
+            color="success"
+            startIcon={<QrCodeScanner />}
+            onClick={() => setEnrollOpen(true)}
+          >
+            Enroll Student
           </Button>
         </Box>
       </Box>
@@ -199,6 +209,8 @@ const Students = () => {
       />
 
       <QrViewDialog student={qrStudent} onClose={() => setQrStudent(null)} />
+
+      <QrStudentEnrollModal open={enrollOpen} onClose={() => setEnrollOpen(false)} />
     </Box>
   );
 };

@@ -6,7 +6,8 @@ import {
   InputAdornment, List, ListItem, ListItemAvatar, ListItemText, Divider,
   ToggleButton, ToggleButtonGroup,
 } from '@mui/material';
-import { Add, Edit, Delete, School, People, PersonAdd, Search, PersonRemove, EventNote, Quiz, Payments as PaymentsIcon, Message, Assessment } from '@mui/icons-material';
+import { Add, Edit, Delete, School, People, PersonAdd, Search, PersonRemove, EventNote, Quiz, Payments as PaymentsIcon, Message, Assessment, QrCodeScanner } from '@mui/icons-material';
+import QrStudentEnrollModal from '../../components/QrStudentEnrollModal';
 import toast from 'react-hot-toast';
 import API from '../../services/api';
 import { ExamsDialog } from './ClassExams';
@@ -714,6 +715,7 @@ const Classes = () => {
   const [paymentsClass, setPaymentsClass] = useState(null);
   const [messagesClass, setMessagesClass] = useState(null);
   const [reportsClass, setReportsClass]   = useState(null);
+  const [enrollOpen, setEnrollOpen] = useState(false);
 
   const fetchClasses = useCallback(() => {
     setLoading(true);
@@ -756,9 +758,14 @@ const Classes = () => {
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h5" fontWeight={700}>My Classes</Typography>
-        <Button variant="contained" startIcon={<Add />} onClick={handleAdd}>
-          Add Class
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button variant="outlined" color="success" startIcon={<QrCodeScanner />} onClick={() => setEnrollOpen(true)}>
+            Enroll Student
+          </Button>
+          <Button variant="contained" startIcon={<Add />} onClick={handleAdd}>
+            Add Class
+          </Button>
+        </Box>
       </Box>
 
       {institutes.length > 1 && (
@@ -957,6 +964,8 @@ const Classes = () => {
         onClose={() => setReportsClass(null)}
         classData={reportsClass}
       />
+
+      <QrStudentEnrollModal open={enrollOpen} onClose={() => setEnrollOpen(false)} />
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
