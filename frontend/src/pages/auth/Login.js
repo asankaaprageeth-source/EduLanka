@@ -20,7 +20,8 @@ const Login = () => {
     try {
       const user = await login(form.email, form.password, form.role);
       toast.success(`Welcome, ${user.name}!`);
-      if (user.role === 'institute') navigate('/institute/dashboard');
+      if (user.role === 'admin') navigate('/admin/dashboard');
+      else if (user.role === 'institute') navigate('/institute/dashboard');
       else if (user.role === 'teacher') navigate('/teacher/dashboard');
       else navigate('/student/dashboard');
     } catch (err) {
