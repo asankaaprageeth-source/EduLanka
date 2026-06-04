@@ -7,6 +7,7 @@ import {
 } from '@mui/material';
 import { Add, Edit, Delete, School, Search, People, PersonAdd } from '@mui/icons-material';
 import AddNewStudentModal from '../../components/AddNewStudentModal';
+import EnrollExistingStudentModal from '../../components/EnrollExistingStudentModal';
 import toast from 'react-hot-toast';
 import API from '../../services/api';
 
@@ -318,6 +319,8 @@ const InstituteClasses = () => {
   const [search, setSearch] = useState('');
   const [addStudentOpen, setAddStudentOpen] = useState(false);
   const [addStudentClassId, setAddStudentClassId] = useState(null);
+  const [enrollExistingOpen, setEnrollExistingOpen] = useState(false);
+  const [enrollClassId, setEnrollClassId] = useState(null);
   const [filterGrade, setFilterGrade] = useState('');
   const [filterDay, setFilterDay] = useState('');
   const [filterType, setFilterType] = useState('');
@@ -513,7 +516,12 @@ const InstituteClasses = () => {
                       </Box>
                     </TableCell>
                     <TableCell align="right">
-                      <Tooltip title="Add Student to this class">
+                      <Tooltip title="Enroll existing students to this class">
+                        <IconButton size="small" color="primary" onClick={() => { setEnrollClassId(c.id); setEnrollExistingOpen(true); }}>
+                          <People fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Add new student to this class">
                         <IconButton size="small" color="success" onClick={() => { setAddStudentClassId(c.id); setAddStudentOpen(true); }}>
                           <PersonAdd fontSize="small" />
                         </IconButton>
@@ -550,6 +558,12 @@ const InstituteClasses = () => {
         open={addStudentOpen}
         onClose={() => { setAddStudentOpen(false); setAddStudentClassId(null); }}
         preSelectedClassId={addStudentClassId}
+      />
+
+      <EnrollExistingStudentModal
+        open={enrollExistingOpen}
+        preClassId={enrollClassId}
+        onClose={() => { setEnrollExistingOpen(false); setEnrollClassId(null); fetchClasses(); }}
       />
 
       {/* Add / Edit Dialog */}

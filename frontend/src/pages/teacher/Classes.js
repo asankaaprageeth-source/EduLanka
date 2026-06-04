@@ -9,6 +9,7 @@ import {
 import { Add, Edit, Delete, School, People, PersonAdd, Search, PersonRemove, EventNote, Quiz, Payments as PaymentsIcon, Message, Assessment, QrCodeScanner } from '@mui/icons-material';
 import QrStudentEnrollModal from '../../components/QrStudentEnrollModal';
 import AddNewStudentModal from '../../components/AddNewStudentModal';
+import EnrollExistingStudentModal from '../../components/EnrollExistingStudentModal';
 import toast from 'react-hot-toast';
 import API from '../../services/api';
 import { ExamsDialog } from './ClassExams';
@@ -718,6 +719,8 @@ const Classes = () => {
   const [reportsClass, setReportsClass]   = useState(null);
   const [enrollOpen, setEnrollOpen] = useState(false);
   const [addStudentOpen, setAddStudentOpen] = useState(false);
+  const [enrollExistingOpen, setEnrollExistingOpen] = useState(false);
+  const [enrollClassId, setEnrollClassId] = useState(null);
 
   const fetchClasses = useCallback(() => {
     setLoading(true);
@@ -889,6 +892,11 @@ const Classes = () => {
                         <EventNote fontSize="small" />
                       </IconButton>
                     </Tooltip>
+                    <Tooltip title="Enroll existing students">
+                      <IconButton size="small" color="primary" onClick={() => { setEnrollClassId(cls.id); setEnrollExistingOpen(true); }}>
+                        <People fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
                     <Tooltip title="Enroll Students">
                       <IconButton size="small" color="success" onClick={() => setEnrollClass(cls)}>
                         <PersonAdd fontSize="small" />
@@ -973,6 +981,12 @@ const Classes = () => {
       <QrStudentEnrollModal open={enrollOpen} onClose={() => setEnrollOpen(false)} />
 
       <AddNewStudentModal open={addStudentOpen} onClose={() => setAddStudentOpen(false)} />
+
+      <EnrollExistingStudentModal
+        open={enrollExistingOpen}
+        preClassId={enrollClassId}
+        onClose={() => { setEnrollExistingOpen(false); setEnrollClassId(null); fetchClasses(); }}
+      />
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>

@@ -4,13 +4,14 @@ import {
   TableBody, Avatar, Chip, TextField, InputAdornment, CircularProgress, Button,
   Dialog, DialogTitle, DialogContent, DialogActions, IconButton,
 } from '@mui/material';
-import { Search, QrCode, QrCodeScanner, Close, Download, PersonAdd } from '@mui/icons-material';
+import { Search, QrCode, QrCodeScanner, Close, Download, PersonAdd, People } from '@mui/icons-material';
 import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import API from '../../services/api';
 import QrScannerModal from '../../components/QrScannerModal';
 import QrStudentEnrollModal from '../../components/QrStudentEnrollModal';
 import AddNewStudentModal from '../../components/AddNewStudentModal';
+import EnrollExistingStudentModal from '../../components/EnrollExistingStudentModal';
 
 // ── QR View Dialog ─────────────────────────────────────────────────────────────
 
@@ -67,6 +68,7 @@ const Students = () => {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [enrollOpen, setEnrollOpen] = useState(false);
   const [addStudentOpen, setAddStudentOpen] = useState(false);
+  const [enrollExistingOpen, setEnrollExistingOpen] = useState(false);
   const [highlightedId, setHighlightedId] = useState(null);
   const highlightRowRef = useRef(null);
 
@@ -134,6 +136,13 @@ const Students = () => {
             onClick={() => setEnrollOpen(true)}
           >
             Enroll Student
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<People />}
+            onClick={() => setEnrollExistingOpen(true)}
+          >
+            Enroll to Class
           </Button>
           <Button
             variant="contained"
@@ -227,6 +236,11 @@ const Students = () => {
       <AddNewStudentModal
         open={addStudentOpen}
         onClose={() => { setAddStudentOpen(false); fetchStudents(); }}
+      />
+
+      <EnrollExistingStudentModal
+        open={enrollExistingOpen}
+        onClose={() => { setEnrollExistingOpen(false); fetchStudents(); }}
       />
     </Box>
   );

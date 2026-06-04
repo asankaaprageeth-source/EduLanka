@@ -201,4 +201,47 @@ router.delete('/enroll', auth, canManage, async (req, res) => {
   }
 });
 
+// GET /api/enrollment/unenrolled-students - students in institute but not in specific class
+router.get('/unenrolled-students', auth, canManage, async (req, res) => {
+  try {
+    const { role, id } = req.user;
+    const { class_id } = req.query;
+
+    let institute_id = null;
+    if (role === 'institute') {
+      institute_id = id;
+    } else {
+      const teacher = await prisma.user.findUnique({ where: { id }, select: { institute_id: true } });
+      institute_id = teacher?.institute_id;
+    }
+
+    if (!institute_id) return res.json({ success: true, data: [] });
+
+    const allStudents = await prisma.user.findMany({
+      where: { institute_id, role: 'student', is_active: true },
+      select: {
+        id: true, name: true, email: true, phone: true,
+        student_id: true, photo: true, qr_code: true,
+        enrollments: {
+          where: { is_active: true },
+          select: { class_id: true, class: { select: { id: true, name: true } } }
+        }
+      },
+      orderBy: { name: 'asc' }
+    });
+
+    let result = allStudents;
+    if (class_id) {
+      result = allStudents.filter(s =>
+        !s.enrollments.some(e => e.class_id === parseInt(class_id))
+      );
+    }
+
+    res.json({ success: true, data: result });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server error.' });
+  }
+});
+
 module.exports = router;
