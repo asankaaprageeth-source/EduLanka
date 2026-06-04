@@ -5,7 +5,8 @@ import {
   DialogActions, TextField, MenuItem, ListSubheader, Collapse, IconButton, Tooltip, Avatar,
   InputAdornment,
 } from '@mui/material';
-import { Add, Edit, Delete, School, Search, People } from '@mui/icons-material';
+import { Add, Edit, Delete, School, Search, People, PersonAdd } from '@mui/icons-material';
+import AddNewStudentModal from '../../components/AddNewStudentModal';
 import toast from 'react-hot-toast';
 import API from '../../services/api';
 
@@ -315,6 +316,8 @@ const InstituteClasses = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [search, setSearch] = useState('');
+  const [addStudentOpen, setAddStudentOpen] = useState(false);
+  const [addStudentClassId, setAddStudentClassId] = useState(null);
   const [filterGrade, setFilterGrade] = useState('');
   const [filterDay, setFilterDay] = useState('');
   const [filterType, setFilterType] = useState('');
@@ -372,6 +375,9 @@ const InstituteClasses = () => {
         <Typography variant="h5" fontWeight={700}>Classes</Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Typography variant="body2" color="text.secondary">{classes.length} total</Typography>
+          <Button variant="outlined" startIcon={<PersonAdd />} onClick={() => { setAddStudentClassId(null); setAddStudentOpen(true); }}>
+            Add New Student
+          </Button>
           <Button variant="contained" startIcon={<Add />} onClick={handleAdd}>
             Add New Class
           </Button>
@@ -507,6 +513,11 @@ const InstituteClasses = () => {
                       </Box>
                     </TableCell>
                     <TableCell align="right">
+                      <Tooltip title="Add Student to this class">
+                        <IconButton size="small" color="success" onClick={() => { setAddStudentClassId(c.id); setAddStudentOpen(true); }}>
+                          <PersonAdd fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                       <Tooltip title="Edit">
                         <IconButton size="small" color="primary" onClick={() => handleEdit(c)}>
                           <Edit fontSize="small" />
@@ -534,6 +545,12 @@ const InstituteClasses = () => {
           </Table>
         )}
       </Paper>
+
+      <AddNewStudentModal
+        open={addStudentOpen}
+        onClose={() => { setAddStudentOpen(false); setAddStudentClassId(null); }}
+        preSelectedClassId={addStudentClassId}
+      />
 
       {/* Add / Edit Dialog */}
       <ClassFormDialog

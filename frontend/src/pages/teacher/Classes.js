@@ -8,6 +8,7 @@ import {
 } from '@mui/material';
 import { Add, Edit, Delete, School, People, PersonAdd, Search, PersonRemove, EventNote, Quiz, Payments as PaymentsIcon, Message, Assessment, QrCodeScanner } from '@mui/icons-material';
 import QrStudentEnrollModal from '../../components/QrStudentEnrollModal';
+import AddNewStudentModal from '../../components/AddNewStudentModal';
 import toast from 'react-hot-toast';
 import API from '../../services/api';
 import { ExamsDialog } from './ClassExams';
@@ -716,6 +717,7 @@ const Classes = () => {
   const [messagesClass, setMessagesClass] = useState(null);
   const [reportsClass, setReportsClass]   = useState(null);
   const [enrollOpen, setEnrollOpen] = useState(false);
+  const [addStudentOpen, setAddStudentOpen] = useState(false);
 
   const fetchClasses = useCallback(() => {
     setLoading(true);
@@ -761,6 +763,9 @@ const Classes = () => {
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button variant="outlined" color="success" startIcon={<QrCodeScanner />} onClick={() => setEnrollOpen(true)}>
             Enroll Student
+          </Button>
+          <Button variant="outlined" startIcon={<PersonAdd />} onClick={() => setAddStudentOpen(true)}>
+            Add New Student
           </Button>
           <Button variant="contained" startIcon={<Add />} onClick={handleAdd}>
             Add Class
@@ -966,6 +971,8 @@ const Classes = () => {
       />
 
       <QrStudentEnrollModal open={enrollOpen} onClose={() => setEnrollOpen(false)} />
+
+      <AddNewStudentModal open={addStudentOpen} onClose={() => setAddStudentOpen(false)} />
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>

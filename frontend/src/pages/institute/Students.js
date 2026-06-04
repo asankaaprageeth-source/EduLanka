@@ -4,12 +4,13 @@ import {
   TableBody, Avatar, Chip, TextField, InputAdornment, CircularProgress, Button,
   Dialog, DialogTitle, DialogContent, DialogActions, IconButton,
 } from '@mui/material';
-import { Search, QrCode, QrCodeScanner, Close, Download } from '@mui/icons-material';
+import { Search, QrCode, QrCodeScanner, Close, Download, PersonAdd } from '@mui/icons-material';
 import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import API from '../../services/api';
 import QrScannerModal from '../../components/QrScannerModal';
 import QrStudentEnrollModal from '../../components/QrStudentEnrollModal';
+import AddNewStudentModal from '../../components/AddNewStudentModal';
 
 // ── QR View Dialog ─────────────────────────────────────────────────────────────
 
@@ -65,15 +66,19 @@ const Students = () => {
   const [qrStudent, setQrStudent] = useState(null);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [enrollOpen, setEnrollOpen] = useState(false);
+  const [addStudentOpen, setAddStudentOpen] = useState(false);
   const [highlightedId, setHighlightedId] = useState(null);
   const highlightRowRef = useRef(null);
 
-  useEffect(() => {
+  const fetchStudents = useCallback(() => {
+    setLoading(true);
     API.get('/institute/students')
       .then((res) => setStudents(res.data.data))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { fetchStudents(); }, [fetchStudents]);
 
   const filtered = students.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -129,6 +134,13 @@ const Students = () => {
             onClick={() => setEnrollOpen(true)}
           >
             Enroll Student
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<PersonAdd />}
+            onClick={() => setAddStudentOpen(true)}
+          >
+            Add New Student
           </Button>
         </Box>
       </Box>
@@ -211,6 +223,11 @@ const Students = () => {
       <QrViewDialog student={qrStudent} onClose={() => setQrStudent(null)} />
 
       <QrStudentEnrollModal open={enrollOpen} onClose={() => setEnrollOpen(false)} />
+
+      <AddNewStudentModal
+        open={addStudentOpen}
+        onClose={() => { setAddStudentOpen(false); fetchStudents(); }}
+      />
     </Box>
   );
 };
